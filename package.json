@@ -1,0 +1,7 @@
+{
+  "name": "phoenix-rp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node serve.mjs", "test": "node --test data.test.mjs" }
+}

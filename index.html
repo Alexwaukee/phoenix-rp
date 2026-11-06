@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Phoenix RP guild roster, level census and character profiles.">
+  <title>Phoenix RP roster</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+<main>
+  <header><h1>Phoenix RP</h1><div><button id="update">Update data</button> <button id="download">Download CSV</button></div></header>
+  <p class="muted">WoW Forever guild roster. Click a character to read their profile.</p>
+  <p id="summary" aria-live="polite">Loading roster…</p>
+  <p class="small muted" id="source">Original roster snapshot. Online status is from the export, not live.</p>
+  <div id="notice" role="status" hidden></div>
+  <section aria-labelledby="chart-title">
+    <h2 id="chart-title">Characters by level</h2>
+    <div id="legend" aria-label="Filter classes"></div>
+    <div class="chart-scroll"><svg id="chart" viewBox="0 0 1050 300" aria-labelledby="chart-title chart-description"><desc id="chart-description">Stacked columns for levels 1 through 35. Each color is a class. Choose a level to filter the roster.</desc></svg></div>
+    <p class="small muted">Click a class above to show or hide it. Click a column to filter the roster by level.</p>
+    <p class="small" id="chart-note" hidden></p>
+  </section>
+  <section aria-labelledby="roster-title">
+    <h2 id="roster-title">Roster <span class="small muted" id="count"></span></h2>
+    <div class="filters">
+      <label>Search <input id="search" type="search" placeholder="Name or RP profile…"></label>
+      <label>Rank <select id="rank"><option value="">All ranks</option></select></label>
+      <label>Activity <select id="activity"><option value="">Everyone</option><option value="online">Online at export</option><option value="recent">Seen less than 24h ago</option><option value="older">Seen 24h+ ago</option></select></label>
+      <label>Profiles <select id="profile-filter"><option value="">Everyone</option><option value="story">Has RP profile</option><option value="gear">Has gear data</option></select></label>
+      <label>Level <select id="level"><option value="">All levels</option></select></label>
+      <button id="reset">Reset filters</button>
+    </div>
+    <div class="table-scroll"><table><thead><tr>
+      <th scope="col" aria-sort="ascending"><button data-sort="name">Name ↑</button></th>
+      <th scope="col"><button data-sort="level">Level</button></th>
+      <th scope="col"><button data-sort="class">Class</button></th>
+      <th scope="col"><button data-sort="rank">Rank</button></th>
+      <th scope="col"><button data-sort="lastOnline">Last online</button></th>
+      <th scope="col">RP profile</th>
+    </tr></thead><tbody id="members"></tbody></table></div>
+    <div class="pagination"><button id="previous">Previous</button><span id="page"></span><button id="next">Next</button></div>
+  </section>
+  <footer>Counts are characters, including alts. RP profiles contain imported public character fields. Private TRP3 notes are excluded.</footer>
+</main>
+<dialog id="character-dialog" aria-labelledby="character-name">
+  <header><h2 id="character-name"></h2><button data-close="character-dialog" aria-label="Close character">Close</button></header>
+  <p id="character-subtitle" class="muted"></p>
+  <div class="tabs" role="tablist" aria-label="Character information"><button role="tab" id="tab-story" aria-controls="character-content" aria-selected="true" data-tab="story">Story</button><button role="tab" id="tab-details" aria-controls="character-content" aria-selected="false" data-tab="details">Roster details</button><button role="tab" id="tab-gear" aria-controls="character-content" aria-selected="false" data-tab="gear">Gear</button></div>
+  <div id="character-content" role="tabpanel" aria-labelledby="tab-story"></div>
+</dialog>
+<dialog id="data-dialog" aria-labelledby="update-title">
+  <header><h2 id="update-title">Update data</h2><button data-close="data-dialog" aria-label="Close update data">Close</button></header>
+  <p>Imports change this browser only. To share an update, replace the matching data file in the GitHub repository.</p>
+  <label>Data type <select id="import-kind"><option value="roster">Roster CSV</option><option value="profiles">TRP3 / RP profiles</option><option value="gear">Gear JSON</option></select></label>
+  <p id="import-help" class="small"></p>
+  <label class="file-label">Choose a file <input type="file" id="import-file" accept=".csv,.txt"></label>
+  <label>Or paste the export <textarea id="import-text" rows="9" spellcheck="false" placeholder="Paste the CSV export here"></textarea></label>
+  <p id="import-error" role="alert" hidden></p>
+  <div class="actions"><button id="apply-import">Import</button><button id="watch-file">Watch local file</button><button id="download-data">Download current data</button></div>
+  <p class="small muted" id="watch-status">File watching works in supported desktop browsers while this page stays open.</p>
+  <hr>
+  <button id="published">Use published data again</button>
+</dialog>
+<noscript>This roster needs JavaScript enabled.</noscript>
+</body>
+</html>
