@@ -1,4 +1,4 @@
-import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,profilesFromLua,validateProfiles,validateGear} from './core.mjs';
+import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-levels';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster=[],profiles=[],gear=[],classes=[],selected=new Set(),sort='name',direction=1,page=0,activeName=null,activeTab='story',watchHandle=null,watchTimer=null,watchText='',watchBusy=false,local=false;
