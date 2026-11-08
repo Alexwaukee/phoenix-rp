@@ -11,19 +11,20 @@ function installOptions(){classes=[...new Set(roster.map(r=>r.class))].sort();se
 function filtered(ignoreLevel=false){const q=$('#search').value.trim().toLocaleLowerCase(),rank=$('#rank').value,act=$('#activity').value,level=$('#level').value,pf=$('#profile-filter').value,pm=profileMap(),gm=gearMap();return roster.filter(r=>selected.has(r.class)&&(!rank||r.rank===rank)&&(!level||ignoreLevel||r.level===Number(level))&&(!act||(act==='online'?r.lastOnline==='Online':act==='recent'?hoursAgo(r.lastOnline)<24:hoursAgo(r.lastOnline)>=24&&Number.isFinite(hoursAgo(r.lastOnline))))&&(!pf||(pf==='story'?pm.has(key(r.name)):gm.has(key(r.name))))&&(!q||[r.name,pm.get(key(r.name))?.displayName,pm.get(key(r.name))?.title].some(s=>s?.toLocaleLowerCase().includes(q))));}
 function render(){
  const summary=summarize(roster);$('#summary').textContent=`${summary.count} characters. ${summary.online} online at export. Average level ${summary.average.toFixed(1)}. ${profiles.filter(p=>roster.some(r=>key(r.name)===key(p.name))).length} RP profiles.`;
- $('#source').textContent=local?'Local data in this browser. Other visitors still see the published roster.':'Original roster snapshot. Online status is from the export, not live.';
+ $('#source').textContent=local?'Local data in this browser. Other visitors still see the published roster.':'Published roster snapshot. Online status is from the export, not live.';
  $('#legend').innerHTML=classes.map(c=>`<button aria-pressed="${selected.has(c)}" data-class="${esc(c)}"><span class="swatch" style="background:${CLASS_COLORS[c]||'#999'}"></span>${esc(c)}</button>`).join('');
  renderChart();renderTable();
 }
 function renderChart(){
- const rows=filtered(true),data=census(rows,classes),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
- const left=36,right=1038,bottom=263,height=235,w=(right-left)/35;
- let html='<desc id="chart-description">Stacked columns for levels 1 through 35. Each color is a class. Choose a level to filter the roster.</desc>';
+ const rows=filtered(true),levelCount=Math.max(35,...roster.map(r=>r.level)),data=census(rows,classes,levelCount),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
+ const left=36,right=1038,bottom=263,height=235,w=(right-left)/levelCount;
+ let html=`<desc id="chart-description">Stacked columns for levels 1 through ${levelCount}. Each color is a class. Choose a level to filter the roster.</desc>`;
  for(let n=0;n<=top;n+=step){const y=bottom-n/top*height;html+=`<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="#ddd"/><text x="${left-9}" y="${y+4}" text-anchor="end" font-size="11" fill="#555">${n}</text>`;}
  for(const d of data){const x=left+(d.level-1)*w,count=d.counts.reduce((a,b)=>a+b,0);html+=`<g class="bar ${$('#level').value===String(d.level)?'selected':''}" tabindex="0" role="button" aria-label="Level ${d.level}, ${count} characters" data-level="${d.level}" aria-pressed="${$('#level').value===String(d.level)}"><title>Level ${d.level}: ${count} characters\n${esc(classes.filter((_,i)=>d.counts[i]).map(c=>c+': '+d.counts[classes.indexOf(c)]).join('\n'))}</title><rect class="level-hit" x="${x}" y="18" width="${w}" height="265"/>`;let sum=0;d.counts.forEach((n,i)=>{if(!n)return;const h=n/top*height;html+=`<rect x="${x+4}" y="${bottom-(sum+n)/top*height}" width="${w-8}" height="${h}" fill="${CLASS_COLORS[classes[i]]||'#999'}"/>`;sum+=n;});html+=`<text x="${x+w/2}" y="280" text-anchor="middle" font-size="10" fill="#444">${d.level}</text></g>`;}
  html+='<text x="535" y="298" text-anchor="middle" font-size="11" fill="#555">Level</text><text x="3" y="13" font-size="11" fill="#555">Characters</text>';
  $('#chart').innerHTML=html;
- const outside=rows.filter(r=>r.level>35).length;$('#chart-note').hidden=!outside;$('#chart-note').textContent=`${outside} characters are above level 35 and appear in the table, outside this chart.`;
+ $('#chart').style.minWidth=Math.max(700,levelCount*20)+'px';
+ $('#chart-note').hidden=false;$('#chart-note').textContent=`Chart total: ${rows.length} characters. Levels 1–${levelCount}.`;
 }
 function renderTable(){
  const list=filtered(),pm=profileMap();list.sort((a,b)=>{let x=a[sort],y=b[sort];if(sort==='lastOnline'){x=hoursAgo(x);y=hoursAgo(y);}return direction*(typeof x==='number'?(x===y?0:x>y?1:-1):String(x).localeCompare(String(y)))||a.name.localeCompare(b.name);});
@@ -82,3 +83,4 @@ async function init(){try{
  installOptions();render();importHelp();const match=/^#character=(.+)/.exec(location.hash);if(match){try{showCharacter(decodeURIComponent(match[1]));}catch{}}
  }catch(e){$('#summary').textContent='The roster could not be loaded.';message(e.message+' Serve this folder over HTTP, rather than opening index.html directly.');}}
 init();
+

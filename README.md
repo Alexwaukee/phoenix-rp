@@ -6,7 +6,7 @@ A basic guild roster website. Plain HTML, CSS and JavaScript, hosted on GitHub P
 
 https://Alexwaukee.github.io/phoenix-rp/
 
-There are 192 characters in the initial roster. The chart shows levels 1–35, stacked by class. Click a class to toggle it or a column to filter by level. The roster supports search, sorting, rank/activity filters, and CSV downloads.
+The chart shows every level from 1 through the roster's highest level, stacked by class, with a minimum range of 1–35. It expands automatically when higher-level characters appear. Click a class to toggle it or a column to filter by level. The roster supports search, sorting, rank/activity filters, and CSV downloads.
 
 ## Update the roster
 
@@ -17,7 +17,7 @@ There are 192 characters in the initial roster. The chart shows levels 1–35, s
 
 GitHub Pages updates after the commit. Browser imports are local until you update the repository. Online status describes the export snapshot, not current activity.
 
-The required columns are `Name,Level,Class,Rank,Last Online`. New roster sizes are supported. Characters above level 35 remain in the table and are explicitly counted outside the chart.
+The required columns are `Name,Level,Class,Rank,Last Online`. New roster sizes and higher character levels are supported. The chart total and roster table recalculate from the same CSV. Reload the page after GitHub Pages finishes deploying a repository update.
 
 ## Optional file watching
 
@@ -69,3 +69,4 @@ Open http://127.0.0.1:4173. No build or dependencies are required. GitHub Pages 
 Source roster counts were independently checked: 192 characters, 26 online at export, average level 11.90625, median level 11, and 166 seen less than 24 hours ago.
 
 References: [Simple exporter](https://github.com/sahammer/SimpleWowExporters), [TRP3](https://github.com/Total-RP/Total-RP-3), [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages), [browser file access](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access).
+
