@@ -22,7 +22,7 @@ test('Optional Race column can be inserted anywhere and survives CSV downloads',
 test('Every row in the current CSV is included in the chart, including levels above 35',()=>{
  assert.ok(roster.length>0);assert.equal(new Set(roster.map(r=>r.name)).size,roster.length);
  const classes=[...new Set(roster.map(r=>r.class))],counts=census(roster,classes);
- assert.equal(counts.length,Math.max(35,...roster.map(r=>r.level)));
+ assert.equal(counts.length,Math.max(...roster.map(r=>r.level)));
  assert.equal(counts.reduce((n,d)=>n+d.counts.reduce((a,b)=>a+b,0),0),roster.length);
  const expected=new Map();for(const r of roster)expected.set(r.class,(expected.get(r.class)||0)+1);
  assert.deepEqual(counts.reduce((n,d)=>n.map((x,i)=>x+d.counts[i]),Array(classes.length).fill(0)),classes.map(c=>expected.get(c)));
@@ -37,7 +37,10 @@ test('A new CSV recalculates stacks and extends the level axis without dropping 
  assert.equal(next.length,46);assert.deepEqual(next[34].counts,[1,0]);assert.deepEqual(next[35].counts,[1,0]);assert.deepEqual(next[45].counts,[0,1]);
  assert.equal(next.reduce((n,r)=>n+r.counts.reduce((a,b)=>a+b,0),0),3);
  assert.equal(census(old,['Mage','Warrior'],46).length,46);
- assert.equal(census([] ,['Mage']).length,35);
+ const lower=[{...old[0],level:12}];
+ assert.equal(census(parseRoster(rosterCSV(lower)),['Mage','Warrior']).length,12);
+ assert.equal(census([{...old[0],level:1}],['Mage']).length,1);
+ assert.equal(census([] ,['Mage']).length,1);
 });
 test('CSV handles quoted commas, newlines, Unicode, BOM and escaped quotes',()=>{
  assert.deepEqual(parseCSV('\uFEFF"one","two,three","a""b"\r\n"Fionà","a\nb","c"'),[['one','two,three','a"b'],['Fionà','a\nb','c']]);

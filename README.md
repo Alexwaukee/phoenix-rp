@@ -6,7 +6,7 @@ A basic guild roster website. Plain HTML, CSS and JavaScript, hosted on GitHub P
 
 https://Alexwaukee.github.io/phoenix-rp/
 
-The chart shows every level from 1 through the roster's highest level, stacked by class, with a minimum range of 1–35. It expands automatically when higher-level characters appear. Click a class to toggle it or a column to filter by level. The roster supports search, sorting, rank/activity filters, and CSV downloads.
+The chart shows every level from 1 through the roster's highest level, stacked by class. The x axis recalculates whenever roster data loads or is imported, and expands or shrinks to match that roster. Filters keep the full roster's level range. Click a class to toggle it or a column to filter by level. The roster supports search, sorting, rank/activity filters, and CSV downloads.
 
 ## Update the roster
 

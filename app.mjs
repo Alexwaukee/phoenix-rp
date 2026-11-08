@@ -1,4 +1,4 @@
-import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-classes';
+import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-axis';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster=[],profiles=[],gear=[],classes=[],selected=new Set(),sort='name',direction=1,page=0,activeName=null,activeTab='story',watchHandle=null,watchTimer=null,watchText='',watchBusy=false,local=false;
@@ -20,7 +20,7 @@ function renderClassCounts(){
  $('#race-note').hidden=hasRace;$('#race-note').textContent='Race data is not included in this export. An optional Race column adds a breakdown under each class.';
 }
 function renderChart(){
- const rows=filtered(true),levelCount=Math.max(35,...roster.map(r=>r.level)),data=census(rows,classes,levelCount),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
+ const rows=filtered(true),levelCount=Math.max(1,...roster.map(r=>r.level)),data=census(rows,classes,levelCount),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
  const left=36,right=1038,bottom=263,height=235,w=(right-left)/levelCount;
  let html=`<desc id="chart-description">Stacked columns for levels 1 through ${levelCount}. Each color is a class. Choose a level to filter the roster.</desc>`;
  for(let n=0;n<=top;n+=step){const y=bottom-n/top*height;html+=`<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="#ddd"/><text x="${left-9}" y="${y+4}" text-anchor="end" font-size="11" fill="#555">${n}</text>`;}
