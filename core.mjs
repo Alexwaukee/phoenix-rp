@@ -17,20 +17,22 @@ export function parseCSV(text){
  return rows;
 }
 export function parseRoster(text){
- const rows=parseCSV(text),header=rows.shift();
- if(!header||HEADERS.some((h,i)=>header[i]?.trim()!==h)||header.length!==5)throw Error('Use the five columns: Name, Level, Class, Rank, Last Online.');
+ const rows=parseCSV(text),header=rows.shift()?.map(h=>h.trim());
+ if(!header||HEADERS.some(h=>!header.includes(h))||new Set(header).size!==header.length||header.some(h=>!HEADERS.includes(h)&&h!=='Race'))throw Error('Use Name, Level, Class, Rank, Last Online, plus an optional Race column.');
+ const columns=Object.fromEntries(header.map((h,i)=>[h,i]));
  if(!rows.length)throw Error('The roster contains no characters.');
  if(rows.length>20000)throw Error('This export is too large (maximum 20,000 characters).');
  const seen=new Set();
  return rows.map((r,i)=>{
-  if(r.length!==5||r.some(v=>!v.trim()))throw Error(`Row ${i+2} needs all five fields.`);
-  const [name,level,cls,rank,lastOnline]=r.map(s=>s.trim()),n=Number(level);
+  if(r.length!==header.length||HEADERS.some(h=>!r[columns[h]]?.trim()))throw Error(`Row ${i+2} needs all five required fields.`);
+  const [name,level,cls,rank,lastOnline]=HEADERS.map(h=>r[columns[h]].trim()),n=Number(level);
   if(!/^\d+$/.test(level)||!Number.isSafeInteger(n)||n<1||n>1000)throw Error(`Invalid level for ${name}.`);
   if(seen.has(key(name)))throw Error(`Duplicate character name: ${name}.`);seen.add(key(name));
-  return {name,level:n,class:cls,rank,lastOnline};
+  return {name,level:n,class:cls,rank,lastOnline,...(columns.Race!==undefined?{race:r[columns.Race].trim()}:{})};
  });
 }
-export function rosterCSV(rows){return [HEADERS,...rows.map(r=>[r.name,r.level,r.class,r.rank,r.lastOnline])].map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';}
+export function rosterCSV(rows){const race=rows.some(r=>Object.hasOwn(r,'race'));return [[...HEADERS,...(race?['Race']:[])],...rows.map(r=>[r.name,r.level,r.class,r.rank,r.lastOnline,...(race?[r.race||'']:[])])].map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';}
+export function classBreakdown(rows,classes=[...new Set(rows.map(r=>r.class))].sort()){return classes.map(className=>{const members=rows.filter(r=>r.class===className),races=new Map();let unknown=0;for(const r of members){const race=r.race?.trim();if(race)races.set(race,(races.get(race)||0)+1);else unknown++;}return {className,count:members.length,races:[...races].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([name,count])=>({name,count})),unknown};});}
 export function hoursAgo(text){if(text==='Online'||text==='< 1h ago')return 0;const m=/^(?:(\d+)d(?: )?)?(?:(\d+)h)? ago$/.exec(text);return m&&(m[1]||m[2])?Number(m[1]||0)*24+Number(m[2]||0):Infinity;}
 export function summarize(rows){const levels=rows.map(r=>r.level).sort((a,b)=>a-b),n=rows.length;return {count:n,online:rows.filter(r=>r.lastOnline==='Online').length,under24:rows.filter(r=>hoursAgo(r.lastOnline)<24).length,average:n?levels.reduce((a,b)=>a+b,0)/n:0,median:n?(levels[Math.floor((n-1)/2)]+levels[Math.floor(n/2)])/2:0};}
 export function census(rows,classes,maxLevel=Math.max(35,...rows.map(r=>r.level))){return Array.from({length:Math.max(35,maxLevel)},(_,i)=>({level:i+1,counts:classes.map(c=>rows.filter(r=>r.level===i+1&&r.class===c).length)}));}

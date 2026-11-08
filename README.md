@@ -17,7 +17,9 @@ The chart shows every level from 1 through the roster's highest level, stacked b
 
 GitHub Pages updates after the commit. Browser imports are local until you update the repository. Online status describes the export snapshot, not current activity.
 
-The required columns are `Name,Level,Class,Rank,Last Online`. New roster sizes and higher character levels are supported. The chart total and roster table recalculate from the same CSV. Reload the page after GitHub Pages finishes deploying a repository update.
+The required columns are `Name,Level,Class,Rank,Last Online`. You can include an optional `Race` column in any position. Class totals appear in the chart legend; when race data is available, race subcounts appear below each class. Missing races are counted as "Not provided", and no races are inferred from class or RP profiles. Class counts follow the search, rank, activity, profile and level filters. Hidden classes keep their counts visible so you can re-enable them.
+
+New roster sizes and higher character levels are supported. The chart total and roster table recalculate from the same CSV. Reload the page after GitHub Pages finishes deploying a repository update.
 
 ## Optional file watching
 

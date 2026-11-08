@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {parseRoster,parseCSV,rosterCSV,summarize,census,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText} from './core.mjs';
+import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText} from './core.mjs';
 const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),roster=parseRoster(csv);
+
+test('Class totals and race subcounts include unknown races without inventing them',()=>{
+ const rows=[{class:'Mage',race:'Human'},{class:'Mage',race:'Gnome'},{class:'Mage',race:'Human'},{class:'Mage'},{class:'Warrior',race:'Orc'}];
+ assert.deepEqual(classBreakdown(rows),[{className:'Mage',count:4,races:[{name:'Human',count:2},{name:'Gnome',count:1}],unknown:1},{className:'Warrior',count:1,races:[{name:'Orc',count:1}],unknown:0}]);
+ assert.equal(classBreakdown(roster).reduce((n,c)=>n+c.count,0),roster.length);
+ for(const c of classBreakdown(rows))assert.equal(c.races.reduce((n,r)=>n+r.count,0)+c.unknown,c.count);
+ assert.deepEqual(classBreakdown(rows.filter(r=>r.class==='Warrior'),['Mage','Warrior'])[0],{className:'Mage',count:0,races:[],unknown:0});
+});
+
+test('Optional Race column can be inserted anywhere and survives CSV downloads',()=>{
+ const input='Name,Level,Class,Race,Rank,Last Online\nTest One,20,Mage,Human,Member,Online\nTest Two,36,Mage,,Member,1h ago';
+ const rows=parseRoster(input);assert.equal(rows[0].race,'Human');assert.equal(rows[1].race,'');
+ assert.deepEqual(parseRoster(rosterCSV(rows)),rows);
+ assert.equal(parseCSV(rosterCSV(roster))[0].length,5);
+ assert.throws(()=>parseRoster('Name,Level,Class,Rank,Last Online,Race,Race\nA,1,Mage,Member,Online,Human,Human'),/optional Race/);
+});
 test('Every row in the current CSV is included in the chart, including levels above 35',()=>{
  assert.ok(roster.length>0);assert.equal(new Set(roster.map(r=>r.name)).size,roster.length);
  const classes=[...new Set(roster.map(r=>r.class))],counts=census(roster,classes);

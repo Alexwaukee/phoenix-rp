@@ -1,4 +1,4 @@
-import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-levels';
+import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-classes';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster=[],profiles=[],gear=[],classes=[],selected=new Set(),sort='name',direction=1,page=0,activeName=null,activeTab='story',watchHandle=null,watchTimer=null,watchText='',watchBusy=false,local=false;
@@ -8,12 +8,16 @@ const gearMap=()=>new Map(gear.map(p=>[key(p.name),p]));
 function message(text){$('#notice').textContent=text;$('#notice').hidden=!text;}
 function saveLocal(){local=true;try{localStorage.setItem(storageKey,JSON.stringify({csv:rosterCSV(roster),profiles,gear}));}catch{message('Data imported, but this browser could not save it for the next visit. Download a copy to keep it.');}}
 function installOptions(){classes=[...new Set(roster.map(r=>r.class))].sort();selected=new Set(classes);$('#rank').replaceChildren(new Option('All ranks',''),...[...new Set(roster.map(r=>r.rank))].sort().map(v=>new Option(v,v)));$('#level').replaceChildren(new Option('All levels',''),...[...new Set(roster.map(r=>r.level))].sort((a,b)=>a-b).map(v=>new Option(v,v)));}
-function filtered(ignoreLevel=false){const q=$('#search').value.trim().toLocaleLowerCase(),rank=$('#rank').value,act=$('#activity').value,level=$('#level').value,pf=$('#profile-filter').value,pm=profileMap(),gm=gearMap();return roster.filter(r=>selected.has(r.class)&&(!rank||r.rank===rank)&&(!level||ignoreLevel||r.level===Number(level))&&(!act||(act==='online'?r.lastOnline==='Online':act==='recent'?hoursAgo(r.lastOnline)<24:hoursAgo(r.lastOnline)>=24&&Number.isFinite(hoursAgo(r.lastOnline))))&&(!pf||(pf==='story'?pm.has(key(r.name)):gm.has(key(r.name))))&&(!q||[r.name,pm.get(key(r.name))?.displayName,pm.get(key(r.name))?.title].some(s=>s?.toLocaleLowerCase().includes(q))));}
+function filtered(ignoreLevel=false,ignoreClasses=false){const q=$('#search').value.trim().toLocaleLowerCase(),rank=$('#rank').value,act=$('#activity').value,level=$('#level').value,pf=$('#profile-filter').value,pm=profileMap(),gm=gearMap();return roster.filter(r=>(ignoreClasses||selected.has(r.class))&&(!rank||r.rank===rank)&&(!level||ignoreLevel||r.level===Number(level))&&(!act||(act==='online'?r.lastOnline==='Online':act==='recent'?hoursAgo(r.lastOnline)<24:hoursAgo(r.lastOnline)>=24&&Number.isFinite(hoursAgo(r.lastOnline))))&&(!pf||(pf==='story'?pm.has(key(r.name)):gm.has(key(r.name))))&&(!q||[r.name,pm.get(key(r.name))?.displayName,pm.get(key(r.name))?.title].some(s=>s?.toLocaleLowerCase().includes(q))));}
 function render(){
  const summary=summarize(roster);$('#summary').textContent=`${summary.count} characters. ${summary.online} online at export. Average level ${summary.average.toFixed(1)}. ${profiles.filter(p=>roster.some(r=>key(r.name)===key(p.name))).length} RP profiles.`;
  $('#source').textContent=local?'Local data in this browser. Other visitors still see the published roster.':'Published roster snapshot. Online status is from the export, not live.';
- $('#legend').innerHTML=classes.map(c=>`<button aria-pressed="${selected.has(c)}" data-class="${esc(c)}"><span class="swatch" style="background:${CLASS_COLORS[c]||'#999'}"></span>${esc(c)}</button>`).join('');
  renderChart();renderTable();
+}
+function renderClassCounts(){
+ const hasRace=roster.some(r=>r.race?.trim());
+ $('#legend').innerHTML=classBreakdown(filtered(false,true),classes).map(c=>{const parts=c.races.map(r=>`${r.name}: ${r.count}`);if(c.unknown)parts.push(`Not provided: ${c.unknown}`);return `<span class="class-breakdown"><button aria-pressed="${selected.has(c.className)}" data-class="${esc(c.className)}"><span class="swatch" style="background:${CLASS_COLORS[c.className]||'#999'}"></span>${esc(c.className)} (${c.count})</button>${hasRace&&c.count?`<span class="class-races small muted">${esc(parts.join(', '))}</span>`:''}</span>`;}).join('');
+ $('#race-note').hidden=hasRace;$('#race-note').textContent='Race data is not included in this export. An optional Race column adds a breakdown under each class.';
 }
 function renderChart(){
  const rows=filtered(true),levelCount=Math.max(35,...roster.map(r=>r.level)),data=census(rows,classes,levelCount),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
@@ -27,6 +31,7 @@ function renderChart(){
  $('#chart-note').hidden=false;$('#chart-note').textContent=`Chart total: ${rows.length} characters. Levels 1–${levelCount}.`;
 }
 function renderTable(){
+ renderClassCounts();
  const list=filtered(),pm=profileMap();list.sort((a,b)=>{let x=a[sort],y=b[sort];if(sort==='lastOnline'){x=hoursAgo(x);y=hoursAgo(y);}return direction*(typeof x==='number'?(x===y?0:x>y?1:-1):String(x).localeCompare(String(y)))||a.name.localeCompare(b.name);});
  const pages=Math.max(1,Math.ceil(list.length/size));page=Math.min(page,pages-1);$('#count').textContent=`(${list.length} of ${roster.length})`;
  $('#members').innerHTML=list.slice(page*size,(page+1)*size).map(r=>`<tr><td><button class="name-button" data-member="${esc(r.name)}">${esc(r.name)}</button></td><td>${r.level}</td><td><span class="class-dot" style="background:${CLASS_COLORS[r.class]||'#999'}"></span>${esc(r.class)}</td><td>${esc(r.rank)}</td><td>${esc(r.lastOnline)}</td><td>${pm.has(key(r.name))?'Available':'—'}</td></tr>`).join('')||'<tr><td colspan="6">No characters match these filters.</td></tr>';
@@ -39,7 +44,7 @@ function showCharacter(name){const r=roster.find(r=>key(r.name)===key(name));if(
 function renderCharacter(){
  const r=roster.find(r=>r.name===activeName);if(!r)return;const p=profileMap().get(key(r.name)),g=gearMap().get(key(r.name));$('#character-name').textContent=p?.displayName||r.name;$('#character-subtitle').textContent=[p?.title,`Level ${r.level} ${r.class}`,r.name!==p?.displayName&&p?.displayName?r.name:null].filter(Boolean).join(' / ');
  $$('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===activeTab)));$('#character-content').setAttribute('aria-labelledby','tab-'+activeTab);
- if(activeTab==='details')$('#character-content').innerHTML=details([['Name',r.name],['Level',r.level],['Class',r.class],['Guild rank',r.rank],['Last online',r.lastOnline]])+'<p class="small muted">Last online describes the roster export, not current activity.</p>';
+ if(activeTab==='details')$('#character-content').innerHTML=details([['Name',r.name],['Level',r.level],['Class',r.class],['Race',r.race],['Guild rank',r.rank],['Last online',r.lastOnline]])+'<p class="small muted">Last online describes the roster export, not current activity.</p>';
  else if(activeTab==='gear')$('#character-content').innerHTML=g?.equipment.length?`<p class="small muted">${g.updatedAt?'Gear snapshot: '+esc(g.updatedAt):'Imported equipment snapshot; capture time was not provided.'}</p><table><thead><tr><th>Slot</th><th>Item</th><th>Item level</th></tr></thead><tbody>${g.equipment.map(i=>`<tr><td>${esc(i.slot)}</td><td>${esc(i.name)}${i.itemId?`<div class="small muted">Item ${i.itemId} / ${esc(i.quality)}</div>`:''}</td><td>${i.itemLevel??'—'}</td></tr>`).join('')}</tbody></table>`:'<p class="empty">No gear data has been imported for this character. The roster CSV does not include equipment.</p>';
  else if(!p)$('#character-content').innerHTML='<p class="empty">No RP profile has been imported for this character yet.</p><p class="small">Use Update data to import TRP3 saved profile data or a profiles JSON file.</p>';
  else $('#character-content').innerHTML=details([['Pronouns',p.pronouns],['Race',p.race],['RP class',p.rpClass],['Age',p.age],['Eye color',p.eyes],['Height',p.height],['Birthplace',p.birthplace],['Residence',p.residence]])+section('About',p.about)+section('Appearance',p.appearance)+section('Personality',p.personality)+section('History',p.history)+(p.glances||[]).map(g=>section(g.title||'At first glance',g.text)).join('')+'<p class="small muted">Imported public TRP3 fields. Private notes and relationships are excluded.</p>';
