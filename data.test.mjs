@@ -8,11 +8,13 @@ const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),rost
 
 const sample=(name,level,cls='Mage')=>({name,level,class:cls,rank:'Member',lastOnline:'Online'});
 const snap=(letter,at,rows)=>snapshot(letter.repeat(40),at,rows);
-test('Median XP/hour excludes level 6 and below and missing rates, keeps zeros, and averages even samples',()=>{
- const rows=[sample('Low',6),sample('Zero',7),sample('A',10),sample('B',20),sample('Missing',30)],stats=new Map([['low',{xpPerHour:99999}],['zero',{xpPerHour:0}],['a',{xpPerHour:100}],['b',{xpPerHour:500}],['missing',{xpPerHour:null}]]);
- assert.deepEqual(medianXPPerHour(rows,stats),{median:100,count:3});
- assert.deepEqual(medianXPPerHour(rows.filter(r=>r.name!=='Zero'),stats),{median:300,count:2});
- assert.deepEqual(medianXPPerHour(rows.filter(r=>r.name==='Low'||r.name==='Missing'),stats),{median:null,count:0});
+test('Median uses only active leveling characters and handles even, odd and empty samples',()=>{
+ const rows=[sample('Low',6),sample('Zero',7),sample('A',10),sample('B',20),sample('C',30),sample('Missing',30),{...sample('Abandoned',40),lastOnline:'1d ago'},sample('Stopped',50),sample('Capped',60),{...sample('Unknown',40),lastOnline:'Unknown'}];
+ const stats=new Map([['low',{xpPerHour:99999,recentXP:400}],['zero',{xpPerHour:0,recentXP:0}],['a',{xpPerHour:100,recentXP:400}],['b',{xpPerHour:500,recentXP:900}],['c',{xpPerHour:900,recentXP:1400}],['missing',{xpPerHour:null,recentXP:400}],['abandoned',{xpPerHour:99999,recentXP:900}],['stopped',{xpPerHour:99999,recentXP:0}],['capped',{xpPerHour:99999,recentXP:209800}],['unknown',{xpPerHour:99999,recentXP:400}]]);
+ assert.deepEqual(medianXPPerHour(rows,stats),{median:500,count:3});
+ assert.deepEqual(medianXPPerHour(rows.filter(r=>r.name!=='C'),stats),{median:300,count:2});
+ assert.deepEqual(medianXPPerHour(rows.filter(r=>!['A','B','C'].includes(r.name)),stats),{median:null,count:0});
+ assert.deepEqual(medianXPPerHour([{...rows[2],lastOnline:'23h ago'}],stats),{median:100,count:1});
 });
 test('Every character uses the same Day 1, including characters first seen later',()=>{
  const rows=[sample('A',16),sample('B',8),sample('New',2),sample('Short',5)];

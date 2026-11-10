@@ -1,4 +1,4 @@
-import {key,parseRoster} from './core.mjs?v=20261110-races-xp';
+import {key,parseRoster,hoursAgo} from './core.mjs?v=20261110-races-xp';
 import {milestoneXP} from './xp.mjs?v=20261110-races-xp';
 
 export const REPO='Alexwaukee/phoenix-rp';
@@ -29,7 +29,7 @@ export function levelingStats(roster,snapshots){
 }
 const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
 export function medianXPPerHour(rows,stats){
- const rates=rows.filter(r=>r.level>=7).map(r=>stats.get(key(r.name))?.xpPerHour).filter(n=>Number.isFinite(n)).sort((a,b)=>a-b),n=rates.length;
+ const rates=rows.filter(r=>r.level>=7&&r.level<60&&hoursAgo(r.lastOnline)<24).map(r=>stats.get(key(r.name))).filter(s=>s&&s.recentXP>0&&Number.isFinite(s.xpPerHour)&&s.xpPerHour>0).map(s=>s.xpPerHour).sort((a,b)=>a-b),n=rates.length;
  return {median:n?(rates[Math.floor((n-1)/2)]+rates[Math.floor(n/2)])/2:null,count:n};
 }
 export function levelingCSV(roster,stats){

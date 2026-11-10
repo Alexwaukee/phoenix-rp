@@ -1,5 +1,5 @@
 import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear,ARMORY_GUILD_URL,applyArmoryRaces} from './core.mjs?v=20261110-races-xp';
-import {normalizeHistory,levelingStats,levelingCSV,refreshHistory,medianXPPerHour} from './leveling.mjs?v=20261110-xp-median';
+import {normalizeHistory,levelingStats,levelingCSV,refreshHistory,medianXPPerHour} from './leveling.mjs?v=20261110-xp-active';
 import {XP_SOURCE} from './xp.mjs?v=20261110-races-xp';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,7 +18,7 @@ function renderLeveling(){
  const valid=roster.filter(r=>stat(r)?.xpPerHour!=null).length,latest=snapshots.at(-1);
  $('#leveling-summary').textContent=local?historyReason():latest?`${snapshots.length} roster snapshots. Day 1: ${when(snapshots[0].at)}. Rates available for ${valid} of ${roster.length} characters. Latest upload: ${when(latest.at)}.`:historyNote;
  const median=medianXPPerHour(filtered(),local?new Map():levelStats);
- $('#xp-median').textContent=median.count?`Median est. XP/hour (level 7+, current filters): ${rate(median.median)} across ${median.count} character${median.count===1?'':'s'}. Missing rates are excluded; valid zero estimates are included.`:'Median est. XP/hour (level 7+, current filters): unavailable — no eligible characters.';
+ $('#xp-median').textContent=median.count?`Active-leveling median est. XP/hour: ${rate(median.median)} across ${median.count} character${median.count===1?'':'s'} in the current filters. Levels 7–59, seen within 24h of export, with a level increase in their latest observation interval.`:'Active-leveling median est. XP/hour: unavailable — no eligible characters in the current filters. Requires level 7–59, seen within 24h of export, and a level increase in the latest observation interval.';
  $('#history-status').textContent=historyNote;
  $('#download-leveling').disabled=local||!snapshots.length;
 }
