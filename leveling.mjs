@@ -28,6 +28,10 @@ export function levelingStats(roster,snapshots){
  }));
 }
 const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+export function medianXPPerHour(rows,stats){
+ const rates=rows.filter(r=>r.level>=7).map(r=>stats.get(key(r.name))?.xpPerHour).filter(n=>Number.isFinite(n)).sort((a,b)=>a-b),n=rates.length;
+ return {median:n?(rates[Math.floor((n-1)/2)]+rates[Math.floor(n/2)])/2:null,count:n};
+}
 export function levelingCSV(roster,stats){
  const rows=[['Name','Class','Current level','Status','First observed (UTC)','First level','Latest observed (UTC)','Snapshots','Hours since day 1','Levels gained (observed)','Estimated XP/hour since day 1','Previous observed (UTC)','Latest levels gained','Latest interval hours','Latest estimated XP/hour','Day 1 (UTC)','Hours observed for character','Estimated XP gained (level milestones)','Latest estimated XP gained']];
  for(const r of roster){const s=stats.get(key(r.name));rows.push([r.name,r.class,r.level,s.status,s.first?.at,s.first?.level,s.last?.at,s.points.length,s.hours,s.gain,s.xpPerHour,s.points.at(-2)?.at,s.recentGain,s.recentDays===null?null:s.recentDays*24,s.recentXPPerHour,s.startedAt,s.observedDays===null?null:s.observedDays*24,s.xpGain,s.recentXP]);}

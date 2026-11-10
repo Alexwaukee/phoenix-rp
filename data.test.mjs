@@ -2,12 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText,applyArmoryRaces,ARMORY_GUILD_URL} from './core.mjs';
-import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory} from './leveling.mjs';
+import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory,medianXPPerHour} from './leveling.mjs';
 import {XP_TO_NEXT,cumulativeXP,milestoneXP} from './xp.mjs';
 const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),roster=parseRoster(csv);
 
 const sample=(name,level,cls='Mage')=>({name,level,class:cls,rank:'Member',lastOnline:'Online'});
 const snap=(letter,at,rows)=>snapshot(letter.repeat(40),at,rows);
+test('Median XP/hour excludes level 6 and below and missing rates, keeps zeros, and averages even samples',()=>{
+ const rows=[sample('Low',6),sample('Zero',7),sample('A',10),sample('B',20),sample('Missing',30)],stats=new Map([['low',{xpPerHour:99999}],['zero',{xpPerHour:0}],['a',{xpPerHour:100}],['b',{xpPerHour:500}],['missing',{xpPerHour:null}]]);
+ assert.deepEqual(medianXPPerHour(rows,stats),{median:100,count:3});
+ assert.deepEqual(medianXPPerHour(rows.filter(r=>r.name!=='Zero'),stats),{median:300,count:2});
+ assert.deepEqual(medianXPPerHour(rows.filter(r=>r.name==='Low'||r.name==='Missing'),stats),{median:null,count:0});
+});
 test('Every character uses the same Day 1, including characters first seen later',()=>{
  const rows=[sample('A',16),sample('B',8),sample('New',2),sample('Short',5)];
  const history=normalizeHistory({schemaVersion:1,snapshots:[snap('c','2026-11-10T12:00:00Z',rows),snap('a','2026-11-08T12:00:00Z',[sample('A',10),sample('B',8)]),snap('b','2026-11-10T00:00:00Z',[sample('A',15),sample('B',8),sample('Short',2)])]});

@@ -6,6 +6,8 @@ The site reads the commit history of `roster.csv` from the public GitHub API whe
 
 XP per level is the LevelExperience table from Forever build 1.60.1.70862, extracted by [Zephras](https://zephras.com/forever/enUS/experience/). The numeric costs are stored in `xp.mjs`, summed from level 1 (0 XP) through level 60 (4,084,700 XP). The calculation uses only recorded level milestones. Neither snapshot includes XP within its level, so the actual XP gained can be above or below this estimate. Staying at the same level produces an estimate of zero, not proof of zero XP earned. Rates for levels outside the supported table are left blank.
 
+The median follows the active roster filters, then excludes characters whose current level is 6 or below and characters without a finite XP/hour estimate. Known zero estimates remain included. For an even number of characters it averages the middle two values. The page shows the sample size beside the median.
+
 These are estimates over calendar time. GitHub commit times approximate roster capture times; delayed uploads affect the result. Rates include offline time and cannot measure XP per hour played. Day 1 is the first saved roster, not the game's launch or an assumed character creation date. One observation produces no rate. Missing snapshots do not imply a level change, and renames are not inferred. A decrease in level or a change in class suppresses the rate for review. Local imports have no GitHub upload time, so their rates are left blank.
 
 ## Race data
