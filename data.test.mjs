@@ -2,7 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText} from './core.mjs';
+import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory} from './leveling.mjs';
 const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),roster=parseRoster(csv);
+
+const sample=(name,level,cls='Mage')=>({name,level,class:cls,rank:'Member',lastOnline:'Online'});
+const snap=(letter,at,rows)=>snapshot(letter.repeat(40),at,rows);
+test('Leveling uses elapsed calendar time, including zero gains and short observations',()=>{
+ const rows=[sample('A',16),sample('B',8),sample('New',2),sample('Short',5)];
+ const history=normalizeHistory({schemaVersion:1,snapshots:[snap('c','2026-11-10T12:00:00Z',rows),snap('a','2026-11-08T12:00:00Z',[sample('A',10),sample('B',8)]),snap('b','2026-11-10T00:00:00Z',[sample('A',15),sample('B',8),sample('Short',2)])]});
+ const stats=levelingStats(rows,history),a=stats.get('a'),b=stats.get('b'),s=stats.get('short');
+ assert.equal(a.gain,6);assert.equal(a.days,2);assert.equal(a.perDay,3);assert.equal(a.recentGain,1);assert.equal(a.recentDays,.5);assert.equal(a.recentPerDay,2);
+ assert.equal(b.perDay,0);assert.equal(s.days,.5);assert.equal(s.perDay,6);
+ assert.equal(stats.get('new').status,'one-snapshot');assert.equal(stats.get('new').perDay,null);
+ const exported=parseCSV(levelingCSV(rows,stats));assert.equal(exported.length,rows.length+1);assert.equal(exported[1][10],'3');assert.equal(exported[3][10],'');
+});
+test('Changed identities, decreasing levels and untimestamped current levels are not treated as valid rates',()=>{
+ const rows=[sample('Down',3),sample('Changed',8,'Warrior'),sample('New level',12),sample('Missing',5),sample('Gap',8)];
+ const history=[snap('a','2026-11-08T12:00:00Z',[sample('Down',5),sample('Changed',4),sample('New level',10),sample('Missing',5),sample('Gap',2)]),snap('b','2026-11-09T12:00:00Z',[sample('Down',3)]),snap('c','2026-11-10T12:00:00Z',[...rows.filter(r=>!['New level','Missing'].includes(r.name)),sample('New level',11)])];
+ const stats=levelingStats(rows,history);
+ for(const name of ['down','changed']){assert.equal(stats.get(name).status,'changed-history');assert.equal(stats.get(name).perDay,null);}
+ for(const name of ['new level','missing'])assert.equal(stats.get(name).status,'not-in-latest');
+ assert.equal(stats.get('gap').days,2);assert.equal(stats.get('gap').perDay,3);
+});
+test('Future roster commits are loaded automatically, existing snapshots are reused and request limits are surfaced',async()=>{
+ const old=snap('a','2026-11-08T12:00:00Z',[sample('A',1)]),sha='b'.repeat(40),calls=[];
+ const updated=await refreshHistory([old],async url=>{calls.push(url);return url.includes('/commits?')?{ok:true,json:async()=>[{sha,commit:{committer:{date:'2026-11-10T12:00:00Z'}}},{sha:old.sha}]}:{ok:true,text:async()=>rosterCSV([sample('A',7)])};});
+ assert.equal(calls.length,2);assert.equal(updated.length,2);assert.equal(levelingStats([sample('A',7)],updated).get('a').perDay,3);
+ await assert.rejects(refreshHistory([old],async()=>({ok:false,status:403})),/limit reached/);
+ assert.equal(old.characters[0].level,1);
+});
+test('All current characters have a history result and bundled counts match the source snapshots',async()=>{
+ const history=normalizeHistory(JSON.parse(await fs.readFile(new URL('./leveling-history.json',import.meta.url),'utf8'))),stats=levelingStats(roster,history);
+ assert.equal(stats.size,roster.length);assert.equal(history.at(-1).characters.length,roster.length);
+ assert.equal(history.at(-1).characters.reduce((n,r)=>n+r.level,0),roster.reduce((n,r)=>n+r.level,0));
+ for(const s of stats.values()){assert.ok(s.points.length>0);if(s.status==='ok'){assert.ok(Number.isFinite(s.perDay));assert.equal(s.gain,s.last.level-s.first.level);assert.equal(s.perDay,s.gain/((Date.parse(s.last.at)-Date.parse(s.first.at))/86400000));}}
+});
 
 test('Class totals and race subcounts include unknown races without inventing them',()=>{
  const rows=[{class:'Mage',race:'Human'},{class:'Mage',race:'Gnome'},{class:'Mage',race:'Human'},{class:'Mage'},{class:'Warrior',race:'Orc'}];
@@ -66,4 +100,3 @@ test('Published profile and gear inputs match roster names',async()=>{
  assert.throws(()=>validateGear({characters:[{name:'Acadiia Silverwing',equipment:[{name:'missing slot'}]}]},roster),/slot and name/);
  assert.equal(cleanText('|cffffffffText|r'), 'Text');
 });
-

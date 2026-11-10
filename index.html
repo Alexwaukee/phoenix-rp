@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Phoenix RP guild roster, level census and character profiles.">
   <title>Phoenix RP roster</title>
-  <link rel="stylesheet" href="style.css?v=20261108-classes">
-  <script type="module" src="app.mjs?v=20261108-axis"></script>
+  <link rel="stylesheet" href="style.css?v=20261110-leveling">
+  <script type="module" src="app.mjs?v=20261110-leveling"></script>
 </head>
 <body>
 <main>
@@ -25,6 +25,10 @@
   </section>
   <section aria-labelledby="roster-title">
     <h2 id="roster-title">Roster <span class="small muted" id="count"></span></h2>
+    <p class="small" id="leveling-summary" aria-live="polite">Loading roster history…</p>
+    <p class="small muted">Gained and Levels/day use each character’s first and latest roster uploads. Rates include offline time; upload times approximate export times. * Less than one day observed. Click a character’s Leveling tab for its history.</p>
+    <p class="small muted" id="history-status"></p>
+    <div class="history-actions"><button id="download-leveling" disabled>Download leveling CSV</button> <button id="refresh-history">Refresh history</button></div>
     <div class="filters">
       <label>Search <input id="search" type="search" placeholder="Name or RP profile…"></label>
       <label>Rank <select id="rank"><option value="">All ranks</option></select></label>
@@ -37,6 +41,8 @@
       <th scope="col" aria-sort="ascending"><button data-sort="name">Name ↑</button></th>
       <th scope="col"><button data-sort="level">Level</button></th>
       <th scope="col"><button data-sort="class">Class</button></th>
+      <th scope="col"><button data-sort="gain">Gained</button></th>
+      <th scope="col"><button data-sort="perDay">Levels/day</button></th>
       <th scope="col"><button data-sort="rank">Rank</button></th>
       <th scope="col"><button data-sort="lastOnline">Last online</button></th>
       <th scope="col">RP profile</th>
@@ -48,7 +54,7 @@
 <dialog id="character-dialog" aria-labelledby="character-name">
   <header><h2 id="character-name"></h2><button data-close="character-dialog" aria-label="Close character">Close</button></header>
   <p id="character-subtitle" class="muted"></p>
-  <div class="tabs" role="tablist" aria-label="Character information"><button role="tab" id="tab-story" aria-controls="character-content" aria-selected="true" data-tab="story">Story</button><button role="tab" id="tab-details" aria-controls="character-content" aria-selected="false" data-tab="details">Roster details</button><button role="tab" id="tab-gear" aria-controls="character-content" aria-selected="false" data-tab="gear">Gear</button></div>
+  <div class="tabs" role="tablist" aria-label="Character information"><button role="tab" id="tab-story" aria-controls="character-content" aria-selected="true" data-tab="story">Story</button><button role="tab" id="tab-details" aria-controls="character-content" aria-selected="false" data-tab="details">Roster details</button><button role="tab" id="tab-leveling" aria-controls="character-content" aria-selected="false" data-tab="leveling">Leveling</button><button role="tab" id="tab-gear" aria-controls="character-content" aria-selected="false" data-tab="gear">Gear</button></div>
   <div id="character-content" role="tabpanel" aria-labelledby="tab-story"></div>
 </dialog>
 <dialog id="data-dialog" aria-labelledby="update-title">
@@ -67,4 +73,3 @@
 <noscript>This roster needs JavaScript enabled.</noscript>
 </body>
 </html>
-

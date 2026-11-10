@@ -1,10 +1,33 @@
-import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261108-axis';
+import {CLASS_COLORS,key,parseRoster,rosterCSV,hoursAgo,summarize,census,classBreakdown,profilesFromLua,validateProfiles,validateGear} from './core.mjs?v=20261110-leveling';
+import {normalizeHistory,levelingStats,levelingCSV,refreshHistory} from './leveling.mjs?v=20261110-leveling';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let roster=[],profiles=[],gear=[],classes=[],selected=new Set(),sort='name',direction=1,page=0,activeName=null,activeTab='story',watchHandle=null,watchTimer=null,watchText='',watchBusy=false,local=false;
 const size=25,storageKey='phoenix-rp-data-v1';
 const profileMap=()=>new Map(profiles.map(p=>[key(p.name),p]));
 const gearMap=()=>new Map(gear.map(p=>[key(p.name),p]));
+let snapshots=[],levelStats=new Map(),historyNote='Loading roster history…';
+const when=at=>new Date(at).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const rate=n=>n===null||n===undefined?'—':n.toFixed(2);
+const gain=n=>n===null||n===undefined?'—':(n>0?'+':'')+n;
+const stat=r=>local?null:levelStats.get(key(r.name));
+function historyReason(s){return local?'Local imports have no GitHub upload timestamp. Use the published roster for leveling rates.':s?.status==='one-snapshot'?'Only one snapshot so far; a second timestamped observation is needed.':s?.status==='changed-history'?'A level decrease or class change needs review; a rate cannot be calculated reliably.':'This character does not match the latest history snapshot. Rates will appear when its published history is available.';}
+function renderLeveling(){
+ levelStats=levelingStats(roster,snapshots);
+ const valid=roster.filter(r=>stat(r)?.status==='ok').length,latest=snapshots.at(-1);
+ $('#leveling-summary').textContent=local?historyReason():latest?`${snapshots.length} roster snapshots. Rates available for ${valid} of ${roster.length} characters. Latest upload: ${when(latest.at)}.`:historyNote;
+ $('#history-status').textContent=historyNote;
+ $('#download-leveling').disabled=local||!snapshots.length;
+}
+async function loadHistory(){
+ $('#refresh-history').disabled=true;historyNote='Checking GitHub for roster updates…';
+ try{
+  if(!snapshots.length){try{const r=await fetch('leveling-history.json',{cache:'no-store'});if(r.ok)snapshots=normalizeHistory(await r.json());}catch{}}
+  renderTable();
+  snapshots=await refreshHistory(snapshots);historyNote='History checked against GitHub. Dates are shown in your local time zone.';
+ }catch(e){historyNote=e.message+(snapshots.length?' Showing bundled history; refresh to retry.':' Refresh to retry.');}
+ finally{$('#refresh-history').disabled=false;renderTable();if(activeName)renderCharacter();}
+}
 function message(text){$('#notice').textContent=text;$('#notice').hidden=!text;}
 function saveLocal(){local=true;try{localStorage.setItem(storageKey,JSON.stringify({csv:rosterCSV(roster),profiles,gear}));}catch{message('Data imported, but this browser could not save it for the next visit. Download a copy to keep it.');}}
 function installOptions(){classes=[...new Set(roster.map(r=>r.class))].sort();selected=new Set(classes);$('#rank').replaceChildren(new Option('All ranks',''),...[...new Set(roster.map(r=>r.rank))].sort().map(v=>new Option(v,v)));$('#level').replaceChildren(new Option('All levels',''),...[...new Set(roster.map(r=>r.level))].sort((a,b)=>a-b).map(v=>new Option(v,v)));}
@@ -21,22 +44,22 @@ function renderClassCounts(){
 }
 function renderChart(){
  const rows=filtered(true),levelCount=Math.max(1,...roster.map(r=>r.level)),data=census(rows,classes,levelCount),max=Math.max(1,...data.map(d=>d.counts.reduce((a,b)=>a+b,0))),step=max<=10?1:5,top=Math.ceil(max/step)*step;
- const left=36,right=1038,bottom=263,height=235,w=(right-left)/levelCount;
+ const width=Math.max(180,$('#chart').parentElement.clientWidth),left=36,right=width-8,bottom=263,height=235,w=(right-left)/levelCount,gap=Math.min(4,w*.18),tickEvery=Math.max(1,Math.ceil(levelCount/Math.max(1,Math.floor((right-left)/24))));
  let html=`<desc id="chart-description">Stacked columns for levels 1 through ${levelCount}. Each color is a class. Choose a level to filter the roster.</desc>`;
  for(let n=0;n<=top;n+=step){const y=bottom-n/top*height;html+=`<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="#ddd"/><text x="${left-9}" y="${y+4}" text-anchor="end" font-size="11" fill="#555">${n}</text>`;}
- for(const d of data){const x=left+(d.level-1)*w,count=d.counts.reduce((a,b)=>a+b,0);html+=`<g class="bar ${$('#level').value===String(d.level)?'selected':''}" tabindex="0" role="button" aria-label="Level ${d.level}, ${count} characters" data-level="${d.level}" aria-pressed="${$('#level').value===String(d.level)}"><title>Level ${d.level}: ${count} characters\n${esc(classes.filter((_,i)=>d.counts[i]).map(c=>c+': '+d.counts[classes.indexOf(c)]).join('\n'))}</title><rect class="level-hit" x="${x}" y="18" width="${w}" height="265"/>`;let sum=0;d.counts.forEach((n,i)=>{if(!n)return;const h=n/top*height;html+=`<rect x="${x+4}" y="${bottom-(sum+n)/top*height}" width="${w-8}" height="${h}" fill="${CLASS_COLORS[classes[i]]||'#999'}"/>`;sum+=n;});html+=`<text x="${x+w/2}" y="280" text-anchor="middle" font-size="10" fill="#444">${d.level}</text></g>`;}
- html+='<text x="535" y="298" text-anchor="middle" font-size="11" fill="#555">Level</text><text x="3" y="13" font-size="11" fill="#555">Characters</text>';
+ for(const d of data){const x=left+(d.level-1)*w,count=d.counts.reduce((a,b)=>a+b,0),label=d.level===1||d.level===levelCount||(d.level%tickEvery===0&&d.level<levelCount-tickEvery/2&&d.level>tickEvery/2);html+=`<g class="bar ${$('#level').value===String(d.level)?'selected':''}" tabindex="0" role="button" aria-label="Level ${d.level}, ${count} characters" data-level="${d.level}" aria-pressed="${$('#level').value===String(d.level)}"><title>Level ${d.level}: ${count} characters\n${esc(classes.filter((_,i)=>d.counts[i]).map(c=>c+': '+d.counts[classes.indexOf(c)]).join('\n'))}</title><rect class="level-hit" x="${x}" y="18" width="${w}" height="265"/>`;let sum=0;d.counts.forEach((n,i)=>{if(!n)return;const h=n/top*height;html+=`<rect x="${x+gap}" y="${bottom-(sum+n)/top*height}" width="${w-2*gap}" height="${h}" fill="${CLASS_COLORS[classes[i]]||'#999'}"/>`;sum+=n;});html+=(label?`<text x="${x+w/2}" y="280" text-anchor="middle" font-size="10" fill="#444">${d.level}</text>`:'')+'</g>';}
+ html+=`<text x="${(left+right)/2}" y="298" text-anchor="middle" font-size="11" fill="#555">Level</text><text x="3" y="13" font-size="11" fill="#555">Characters</text>`;
+ $('#chart').setAttribute('viewBox',`0 0 ${width} 300`);
  $('#chart').innerHTML=html;
- $('#chart').style.minWidth=Math.max(700,levelCount*20)+'px';
  $('#chart-note').hidden=false;$('#chart-note').textContent=`Chart total: ${rows.length} characters. Levels 1–${levelCount}.`;
 }
 function renderTable(){
- renderClassCounts();
- const list=filtered(),pm=profileMap();list.sort((a,b)=>{let x=a[sort],y=b[sort];if(sort==='lastOnline'){x=hoursAgo(x);y=hoursAgo(y);}return direction*(typeof x==='number'?(x===y?0:x>y?1:-1):String(x).localeCompare(String(y)))||a.name.localeCompare(b.name);});
+ renderClassCounts();renderLeveling();
+ const list=filtered(),pm=profileMap();list.sort((a,b)=>{let x=a[sort],y=b[sort];if(sort==='gain'||sort==='perDay'){x=stat(a)?.[sort];y=stat(b)?.[sort];if(x==null||y==null)return x==null&&y==null?a.name.localeCompare(b.name):x==null?1:-1;}if(sort==='lastOnline'){x=hoursAgo(x);y=hoursAgo(y);}return direction*(typeof x==='number'?(x===y?0:x>y?1:-1):String(x).localeCompare(String(y)))||a.name.localeCompare(b.name);});
  const pages=Math.max(1,Math.ceil(list.length/size));page=Math.min(page,pages-1);$('#count').textContent=`(${list.length} of ${roster.length})`;
- $('#members').innerHTML=list.slice(page*size,(page+1)*size).map(r=>`<tr><td><button class="name-button" data-member="${esc(r.name)}">${esc(r.name)}</button></td><td>${r.level}</td><td><span class="class-dot" style="background:${CLASS_COLORS[r.class]||'#999'}"></span>${esc(r.class)}</td><td>${esc(r.rank)}</td><td>${esc(r.lastOnline)}</td><td>${pm.has(key(r.name))?'Available':'—'}</td></tr>`).join('')||'<tr><td colspan="6">No characters match these filters.</td></tr>';
+ $('#members').innerHTML=list.slice(page*size,(page+1)*size).map(r=>{const s=stat(r),hint=s?.status==='ok'?`From level ${s.first.level} on ${when(s.first.at)}; ${s.days.toFixed(2)} calendar days, ${s.points.length} snapshots.`:historyReason(s);return `<tr><td><button class="name-button" data-member="${esc(r.name)}">${esc(r.name)}</button></td><td>${r.level}</td><td><span class="class-dot" style="background:${CLASS_COLORS[r.class]||'#999'}"></span>${esc(r.class)}</td><td title="${esc(hint)}">${gain(s?.gain)}</td><td title="${esc(hint)}">${rate(s?.perDay)}${s?.days<1&&s?.status==='ok'?'*':''}</td><td>${esc(r.rank)}</td><td>${esc(r.lastOnline)}</td><td>${pm.has(key(r.name))?'Available':'—'}</td></tr>`;}).join('')||'<tr><td colspan="8">No characters match these filters.</td></tr>';
  $('#page').textContent=`Page ${page+1} of ${pages}`;$('#previous').disabled=page===0;$('#next').disabled=page>=pages-1;
- $$('[data-sort]').forEach(b=>{const active=b.dataset.sort===sort;b.closest('th').setAttribute('aria-sort',active?(direction===1?'ascending':'descending'):'none');b.textContent=({name:'Name',level:'Level',class:'Class',rank:'Rank',lastOnline:'Last online'}[b.dataset.sort])+(active?(direction===1?' ↑':' ↓'):'');});
+ $$('[data-sort]').forEach(b=>{const active=b.dataset.sort===sort;b.closest('th').setAttribute('aria-sort',active?(direction===1?'ascending':'descending'):'none');b.textContent=({name:'Name',level:'Level',class:'Class',gain:'Gained',perDay:'Levels/day',rank:'Rank',lastOnline:'Last online'}[b.dataset.sort])+(active?(direction===1?' ↑':' ↓'):'');});
 }
 function section(title,text){if(!text)return '';return `<section class="profile-section"><h3>${esc(title)}</h3><div class="story-text">${esc(text)}</div></section>`;}
 function details(pairs){return '<dl>'+pairs.filter(([,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')+'</dl>';}
@@ -44,7 +67,10 @@ function showCharacter(name){const r=roster.find(r=>key(r.name)===key(name));if(
 function renderCharacter(){
  const r=roster.find(r=>r.name===activeName);if(!r)return;const p=profileMap().get(key(r.name)),g=gearMap().get(key(r.name));$('#character-name').textContent=p?.displayName||r.name;$('#character-subtitle').textContent=[p?.title,`Level ${r.level} ${r.class}`,r.name!==p?.displayName&&p?.displayName?r.name:null].filter(Boolean).join(' / ');
  $$('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===activeTab)));$('#character-content').setAttribute('aria-labelledby','tab-'+activeTab);
- if(activeTab==='details')$('#character-content').innerHTML=details([['Name',r.name],['Level',r.level],['Class',r.class],['Race',r.race],['Guild rank',r.rank],['Last online',r.lastOnline]])+'<p class="small muted">Last online describes the roster export, not current activity.</p>';
+ if(activeTab==='leveling'){
+  const s=stat(r);$('#character-content').innerHTML=(s?.status==='ok'?details([['Levels gained',gain(s.gain)],['Levels/day',rate(s.perDay)],['Days observed',s.days.toFixed(2)],['Latest gain',`${gain(s.recentGain)} in ${s.recentDays.toFixed(2)} days (${rate(s.recentPerDay)}/day)`]])+(s.days<1?'<p class="small muted">Less than one day observed; the daily rate is extrapolated from this short window.</p>':''):`<p class="muted">${esc(historyReason(s))}</p>`)+(s?.points.length?`<table class="history-table"><thead><tr><th>Roster upload</th><th>Level</th></tr></thead><tbody>${s.points.map(p=>`<tr><td><a href="https://github.com/Alexwaukee/phoenix-rp/commit/${p.sha}" target="_blank" rel="noopener">${esc(when(p.at))}</a></td><td>${p.level}</td></tr>`).join('')}</tbody></table>`:'')+'<p class="small muted">Levels gained ÷ elapsed calendar days, from the first to latest recorded upload for this name. Upload times approximate export times and include offline time. Names are matched exactly; renames are not inferred.</p>';
+ }
+ else if(activeTab==='details')$('#character-content').innerHTML=details([['Name',r.name],['Level',r.level],['Class',r.class],['Race',r.race],['Guild rank',r.rank],['Last online',r.lastOnline]])+'<p class="small muted">Last online describes the roster export, not current activity.</p>';
  else if(activeTab==='gear')$('#character-content').innerHTML=g?.equipment.length?`<p class="small muted">${g.updatedAt?'Gear snapshot: '+esc(g.updatedAt):'Imported equipment snapshot; capture time was not provided.'}</p><table><thead><tr><th>Slot</th><th>Item</th><th>Item level</th></tr></thead><tbody>${g.equipment.map(i=>`<tr><td>${esc(i.slot)}</td><td>${esc(i.name)}${i.itemId?`<div class="small muted">Item ${i.itemId} / ${esc(i.quality)}</div>`:''}</td><td>${i.itemLevel??'—'}</td></tr>`).join('')}</tbody></table>`:'<p class="empty">No gear data has been imported for this character. The roster CSV does not include equipment.</p>';
  else if(!p)$('#character-content').innerHTML='<p class="empty">No RP profile has been imported for this character yet.</p><p class="small">Use Update data to import TRP3 saved profile data or a profiles JSON file.</p>';
  else $('#character-content').innerHTML=details([['Pronouns',p.pronouns],['Race',p.race],['RP class',p.rpClass],['Age',p.age],['Eye color',p.eyes],['Height',p.height],['Birthplace',p.birthplace],['Residence',p.residence]])+section('About',p.about)+section('Appearance',p.appearance)+section('Personality',p.personality)+section('History',p.history)+(p.glances||[]).map(g=>section(g.title||'At first glance',g.text)).join('')+'<p class="small muted">Imported public TRP3 fields. Private notes and relationships are excluded.</p>';
@@ -65,7 +91,10 @@ $('#legend').addEventListener('click',e=>{const b=e.target.closest('[data-class]
 $('#chart').addEventListener('click',e=>{const b=e.target.closest('[data-level]');if(!b)return;const v=b.dataset.level;if(![...$('#level').options].some(o=>o.value===v))$('#level').add(new Option(v,v));$('#level').value=$('#level').value===v?'':v;page=0;renderChart();renderTable();});
 $('#chart').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.target.closest('[data-level]')?.dispatchEvent(new MouseEvent('click',{bubbles:true}));}});
 $('#members').addEventListener('click',e=>{const b=e.target.closest('[data-member]');if(b)showCharacter(b.dataset.member);});
-$$('[data-sort]').forEach(b=>b.addEventListener('click',()=>{direction=sort===b.dataset.sort?-direction:1;sort=b.dataset.sort;page=0;renderTable();}));
+$$('[data-sort]').forEach(b=>b.addEventListener('click',()=>{direction=sort===b.dataset.sort?-direction:['gain','perDay'].includes(b.dataset.sort)?-1:1;sort=b.dataset.sort;page=0;renderTable();}));
+$('#refresh-history').onclick=loadHistory;
+$('#download-leveling').onclick=()=>download(levelingCSV(filtered(),levelStats),'phoenix-rp-leveling.csv','text/csv;charset=utf-8');
+new ResizeObserver(()=>requestAnimationFrame(renderChart)).observe($('#chart').parentElement);
 $('#previous').onclick=()=>{page--;renderTable();};$('#next').onclick=()=>{page++;renderTable();};$('#reset').onclick=reset;
 $$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());
 $('#character-dialog').addEventListener('close',()=>{activeName=null;history.replaceState(null,'',location.pathname+location.search);});
@@ -85,7 +114,6 @@ async function init(){try{
  const [csv,p,g]=await Promise.all([fetch('roster.csv',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Roster could not be loaded.');return r.text();}),fetch('profiles.json',{cache:'no-store'}).then(r=>r.ok?r.json():{profiles:[]}),fetch('gear.json',{cache:'no-store'}).then(r=>r.ok?r.json():{characters:[]})]);
  roster=parseRoster(csv);const inRoster=p=>roster.some(r=>key(r.name)===key(p.name));profiles=validateProfiles({profiles:Array.isArray(p.profiles)?p.profiles.filter(inRoster):p.profiles},roster);gear=validateGear({characters:Array.isArray(g.characters)?g.characters.filter(inRoster):g.characters},roster);
  try{const saved=JSON.parse(localStorage.getItem(storageKey));if(saved){const r=parseRoster(saved.csv),pm=validateProfiles({profiles:saved.profiles.filter(p=>r.some(x=>key(x.name)===key(p.name)))},r),gm=validateGear({characters:saved.gear.filter(p=>r.some(x=>key(x.name)===key(p.name)))},r);roster=r;profiles=pm;gear=gm;local=true;}}catch{message('Saved local data could not be read. Showing the published roster.');}
- installOptions();render();importHelp();const match=/^#character=(.+)/.exec(location.hash);if(match){try{showCharacter(decodeURIComponent(match[1]));}catch{}}
+ installOptions();render();importHelp();loadHistory();const match=/^#character=(.+)/.exec(location.hash);if(match){try{showCharacter(decodeURIComponent(match[1]));}catch{}}
  }catch(e){$('#summary').textContent='The roster could not be loaded.';message(e.message+' Serve this folder over HTTP, rather than opening index.html directly.');}}
 init();
-
