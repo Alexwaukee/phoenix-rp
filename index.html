@@ -6,7 +6,7 @@
   <meta name="description" content="Phoenix RP guild roster, level census and character profiles.">
   <title>Phoenix RP roster</title>
   <link rel="stylesheet" href="style.css?v=20261110-leveling">
-  <script type="module" src="app.mjs?v=20261110-leveling"></script>
+  <script type="module" src="app.mjs?v=20261110-races-xp"></script>
 </head>
 <body>
 <main>
@@ -26,7 +26,7 @@
   <section aria-labelledby="roster-title">
     <h2 id="roster-title">Roster <span class="small muted" id="count"></span></h2>
     <p class="small" id="leveling-summary" aria-live="polite">Loading roster history…</p>
-    <p class="small muted">Gained and Levels/day use each character’s first and latest roster uploads. Rates include offline time; upload times approximate export times. * Less than one day observed. Click a character’s Leveling tab for its history.</p>
+    <p class="small muted">Est. XP/hour uses the XP required between recorded levels, divided by calendar hours since the first saved roster on November 6. Everyone uses the same Day 1. Partial-level XP and gains before a character’s first observation are unknown; rates include offline time. Click a character’s Leveling tab for details.</p>
     <p class="small muted" id="history-status"></p>
     <div class="history-actions"><button id="download-leveling" disabled>Download leveling CSV</button> <button id="refresh-history">Refresh history</button></div>
     <div class="filters">
@@ -42,7 +42,7 @@
       <th scope="col"><button data-sort="level">Level</button></th>
       <th scope="col"><button data-sort="class">Class</button></th>
       <th scope="col"><button data-sort="gain">Gained</button></th>
-      <th scope="col"><button data-sort="perDay">Levels/day</button></th>
+      <th scope="col"><button data-sort="xpPerHour">Est. XP/hour</button></th>
       <th scope="col"><button data-sort="rank">Rank</button></th>
       <th scope="col"><button data-sort="lastOnline">Last online</button></th>
       <th scope="col">RP profile</th>

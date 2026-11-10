@@ -1,5 +1,13 @@
 export const CLASS_COLORS={Druid:'#ff914d',Hunter:'#a8ce71',Mage:'#70c8ef',Paladin:'#ed8fba',Priest:'#ded9cf',Rogue:'#ecd05c',Shaman:'#478fe5',Warlock:'#ad94df',Warrior:'#bd9872'};
 export const HEADERS=['Name','Level','Class','Rank','Last Online'];
+export const ARMORY_GUILD_URL='https://armorywowforever.com/g/forever/us/rp/phoenix-rp';
+export function applyArmoryRaces(rows,data){
+ if(!data)return rows;
+ if(data.schemaVersion!==1||data.source!==ARMORY_GUILD_URL||data.guild!=='Phoenix RP'||data.region!=='us'||data.mode!=='rp'||!Number.isFinite(Date.parse(data.retrievedAt))||!Array.isArray(data.characters))throw Error('Invalid guild race data.');
+ const matches=new Map();
+ for(const c of data.characters){if(typeof c.name!=='string'||!c.name.trim()||typeof c.class!=='string'||typeof c.race!=='string'||!c.race.trim()||matches.has(key(c.name)))throw Error('Invalid or duplicate race match.');matches.set(key(c.name),c);}
+ return rows.map(r=>{const c=matches.get(key(r.name));return r.race?.trim()||!c||c.class!==r.class?r:{...r,race:c.race,raceSource:data.source,raceCheckedAt:data.retrievedAt};});
+}
 export const key=name=>String(name).normalize('NFC').trim().toLocaleLowerCase('en');
 export function parseCSV(text){
  text=String(text).replace(/^\uFEFF/,'');
@@ -75,4 +83,3 @@ export function profilesFromLua(text,roster){
 }
 export function validateProfiles(json,roster){const rows=Array.isArray(json)?json:json.profiles;if(!Array.isArray(rows))throw Error('Profiles JSON must contain a profiles array.');const names=new Set(roster.map(r=>key(r.name))),seen=new Set();const allowed=['displayName','title','race','rpClass','age','eyes','height','birthplace','residence','pronouns','appearance','personality','history','about','source'];return rows.map(p=>{if(!p||typeof p.name!=='string'||!names.has(key(p.name)))throw Error(`Profile is not matched to a roster character: ${p?.name||'missing name'}.`);if(seen.has(key(p.name)))throw Error(`Duplicate profile: ${p.name}.`);seen.add(key(p.name));const out={name:p.name};for(const f of allowed)if(p[f]!=null){if(typeof p[f]!=='string'||p[f].length>100000)throw Error(`Invalid ${f} for ${p.name}.`);out[f]=cleanText(p[f]);}out.glances=Array.isArray(p.glances)?p.glances.slice(0,5).map(g=>({title:cleanText(g.title),text:cleanText(g.text)})):[];return out;});}
 export function validateGear(json,roster){const rows=Array.isArray(json)?json:json.characters;if(!Array.isArray(rows))throw Error('Gear JSON must contain a characters array.');const names=new Set(roster.map(r=>key(r.name))),seen=new Set();return rows.map(p=>{if(!names.has(key(p.name||'')))throw Error(`Gear character is not in this roster: ${p.name||'missing name'}.`);if(seen.has(key(p.name)))throw Error(`Duplicate gear character: ${p.name}.`);seen.add(key(p.name));if(!Array.isArray(p.equipment))throw Error(`Missing equipment for ${p.name}.`);return {name:p.name,updatedAt:typeof p.updatedAt==='string'?p.updatedAt:null,equipment:p.equipment.slice(0,25).map(i=>{if(typeof i.slot!=='string'||typeof i.name!=='string')throw Error('Each item needs a slot and name.');return {slot:i.slot,name:i.name,itemId:Number.isSafeInteger(i.itemId)&&i.itemId>0?i.itemId:null,itemLevel:Number.isFinite(i.itemLevel)?i.itemLevel:null,quality:typeof i.quality==='string'?i.quality:'Unknown'};})};});}
-

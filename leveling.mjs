@@ -1,4 +1,5 @@
-import {key,parseRoster} from './core.mjs?v=20261110-leveling';
+import {key,parseRoster} from './core.mjs?v=20261110-races-xp';
+import {milestoneXP} from './xp.mjs?v=20261110-races-xp';
 
 export const REPO='Alexwaukee/phoenix-rp';
 export function snapshot(sha,at,rows){
@@ -12,7 +13,7 @@ export function normalizeHistory(input){
  return [...new Map(input.snapshots.map(s=>{const clean=snapshot(s.sha,s.at,s.characters);return [clean.sha,clean];})).values()].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)||a.sha.localeCompare(b.sha));
 }
 export function levelingStats(roster,snapshots){
- const histories=new Map(),latest=snapshots.at(-1);
+ const histories=new Map(),latest=snapshots.at(-1),startedAt=snapshots[0]?.at;
  for(const s of snapshots)for(const r of s.characters){const id=key(r.name);if(!histories.has(id))histories.set(id,[]);histories.get(id).push({at:s.at,sha:s.sha,level:r.level,class:r.class});}
  return new Map(roster.map(r=>{
   const points=histories.get(key(r.name))||[],first=points[0],last=points.at(-1),previous=points.at(-2);
@@ -20,15 +21,16 @@ export function levelingStats(roster,snapshots){
   if(!last||last.sha!==latest?.sha||last.level!==r.level||last.class!==r.class)status='not-in-latest';
   else if(points.some((p,i)=>p.class!==r.class||(i&&p.level<points[i-1].level)))status='changed-history';
   else if(!previous||Date.parse(last.at)<=Date.parse(first.at))status='one-snapshot';
-  const valid=status==='ok',days=valid?(Date.parse(last.at)-Date.parse(first.at))/86400000:null,gain=valid?last.level-first.level:null;
+  const valid=status==='ok',days=valid?(Date.parse(last.at)-Date.parse(startedAt))/86400000:null,observedDays=valid?(Date.parse(last.at)-Date.parse(first.at))/86400000:null,gain=valid?last.level-first.level:null;
   const recentDays=valid?(Date.parse(last.at)-Date.parse(previous.at))/86400000:null,recentGain=valid?last.level-previous.level:null;
-  return [key(r.name),{status,points,first,last,days,gain,perDay:valid?gain/days:null,recentGain,recentDays,recentPerDay:recentDays>0?recentGain/recentDays:null}];
+  const xpGain=valid?milestoneXP(first.level,last.level):null,hours=days===null?null:days*24,recentXP=valid?milestoneXP(previous.level,last.level):null;
+  return [key(r.name),{status,points,first,last,startedAt,days,hours,observedDays,gain,perDay:valid?gain/days:null,xpGain,xpPerHour:xpGain!==null&&hours>0?xpGain/hours:null,recentGain,recentDays,recentPerDay:recentDays>0?recentGain/recentDays:null,recentXP,recentXPPerHour:recentXP!==null&&recentDays>0?recentXP/(recentDays*24):null}];
  }));
 }
 const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
 export function levelingCSV(roster,stats){
- const rows=[['Name','Class','Current level','Status','First observed (UTC)','First level','Latest observed (UTC)','Snapshots','Days observed','Levels gained','Levels per calendar day','Previous observed (UTC)','Latest gain','Latest interval days','Latest levels per calendar day']];
- for(const r of roster){const s=stats.get(key(r.name));rows.push([r.name,r.class,r.level,s.status,s.first?.at,s.first?.level,s.last?.at,s.points.length,s.days,s.gain,s.perDay,s.points.at(-2)?.at,s.recentGain,s.recentDays,s.recentPerDay]);}
+ const rows=[['Name','Class','Current level','Status','First observed (UTC)','First level','Latest observed (UTC)','Snapshots','Hours since day 1','Levels gained (observed)','Estimated XP/hour since day 1','Previous observed (UTC)','Latest levels gained','Latest interval hours','Latest estimated XP/hour','Day 1 (UTC)','Hours observed for character','Estimated XP gained (level milestones)','Latest estimated XP gained']];
+ for(const r of roster){const s=stats.get(key(r.name));rows.push([r.name,r.class,r.level,s.status,s.first?.at,s.first?.level,s.last?.at,s.points.length,s.hours,s.gain,s.xpPerHour,s.points.at(-2)?.at,s.recentGain,s.recentDays===null?null:s.recentDays*24,s.recentXPPerHour,s.startedAt,s.observedDays===null?null:s.observedDays*24,s.xpGain,s.recentXP]);}
  return rows.map(r=>r.map(quote).join(',')).join('\r\n')+'\r\n';
 }
 export async function refreshHistory(bundled,request=(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(15000)})){

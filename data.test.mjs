@@ -1,20 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText} from './core.mjs';
+import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText,applyArmoryRaces,ARMORY_GUILD_URL} from './core.mjs';
 import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory} from './leveling.mjs';
+import {XP_TO_NEXT,cumulativeXP,milestoneXP} from './xp.mjs';
 const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),roster=parseRoster(csv);
 
 const sample=(name,level,cls='Mage')=>({name,level,class:cls,rank:'Member',lastOnline:'Online'});
 const snap=(letter,at,rows)=>snapshot(letter.repeat(40),at,rows);
-test('Leveling uses elapsed calendar time, including zero gains and short observations',()=>{
+test('Every character uses the same Day 1, including characters first seen later',()=>{
  const rows=[sample('A',16),sample('B',8),sample('New',2),sample('Short',5)];
  const history=normalizeHistory({schemaVersion:1,snapshots:[snap('c','2026-11-10T12:00:00Z',rows),snap('a','2026-11-08T12:00:00Z',[sample('A',10),sample('B',8)]),snap('b','2026-11-10T00:00:00Z',[sample('A',15),sample('B',8),sample('Short',2)])]});
  const stats=levelingStats(rows,history),a=stats.get('a'),b=stats.get('b'),s=stats.get('short');
  assert.equal(a.gain,6);assert.equal(a.days,2);assert.equal(a.perDay,3);assert.equal(a.recentGain,1);assert.equal(a.recentDays,.5);assert.equal(a.recentPerDay,2);
- assert.equal(b.perDay,0);assert.equal(s.days,.5);assert.equal(s.perDay,6);
+ assert.equal(a.xpGain,65200);assert.equal(a.hours,48);assert.equal(a.xpPerHour,65200/48);assert.equal(a.recentXPPerHour,1200);
+ assert.equal(b.perDay,0);assert.equal(s.days,2);assert.equal(s.observedDays,.5);assert.equal(s.perDay,1.5);assert.equal(s.startedAt,a.startedAt);
+ assert.equal(b.xpPerHour,0);assert.equal(s.xpPerHour,4400/48);assert.equal(stats.get('new').xpPerHour,null);
  assert.equal(stats.get('new').status,'one-snapshot');assert.equal(stats.get('new').perDay,null);
- const exported=parseCSV(levelingCSV(rows,stats));assert.equal(exported.length,rows.length+1);assert.equal(exported[1][10],'3');assert.equal(exported[3][10],'');
+ const exported=parseCSV(levelingCSV(rows,stats));assert.equal(exported.length,rows.length+1);assert.equal(exported[1][10],String(65200/48));assert.equal(exported[3][10],'');assert.equal(exported[1][15],'2026-11-08T12:00:00.000Z');
+});
+test('XP conversion uses cumulative level costs, handles the cap and rejects unsupported levels',()=>{
+ assert.equal(XP_TO_NEXT.length,59);assert.equal(cumulativeXP(1),0);assert.equal(cumulativeXP(10),27600);assert.equal(cumulativeXP(60),4084700);
+ assert.equal(milestoneXP(1,2),400);assert.equal(milestoneXP(20,21),23200);assert.equal(milestoneXP(10,16),65200);assert.equal(milestoneXP(60,60),0);
+ for(const level of [0,61,2.5])assert.equal(cumulativeXP(level),null);
+ assert.equal(milestoneXP(20,19),null);assert.equal(milestoneXP(59,61),null);
 });
 test('Changed identities, decreasing levels and untimestamped current levels are not treated as valid rates',()=>{
  const rows=[sample('Down',3),sample('Changed',8,'Warrior'),sample('New level',12),sample('Missing',5),sample('Gap',8)];
@@ -35,7 +44,21 @@ test('All current characters have a history result and bundled counts match the 
  const history=normalizeHistory(JSON.parse(await fs.readFile(new URL('./leveling-history.json',import.meta.url),'utf8'))),stats=levelingStats(roster,history);
  assert.equal(stats.size,roster.length);assert.equal(history.at(-1).characters.length,roster.length);
  assert.equal(history.at(-1).characters.reduce((n,r)=>n+r.level,0),roster.reduce((n,r)=>n+r.level,0));
- for(const s of stats.values()){assert.ok(s.points.length>0);if(s.status==='ok'){assert.ok(Number.isFinite(s.perDay));assert.equal(s.gain,s.last.level-s.first.level);assert.equal(s.perDay,s.gain/((Date.parse(s.last.at)-Date.parse(s.first.at))/86400000));}}
+ for(const s of stats.values()){assert.ok(s.points.length>0);if(s.status==='ok'){assert.ok(Number.isFinite(s.perDay));assert.equal(s.gain,s.last.level-s.first.level);assert.equal(s.perDay,s.gain/((Date.parse(s.last.at)-Date.parse(history[0].at))/86400000));assert.equal(s.startedAt,history[0].at);}}
+});
+
+test('Armory races require a matching name and class, preserve CSV races and never replace roster levels',()=>{
+ const input=[sample('A',20),sample('B',3,'Warrior'),{...sample('C',8),race:'CSV race'},sample('D',9)];
+ const data={schemaVersion:1,source:ARMORY_GUILD_URL,region:'us',mode:'rp',guild:'Phoenix RP',retrievedAt:'2026-11-10T15:00:00Z',characters:[{name:'A',level:10,class:'Mage',race:'Human'},{name:'B',class:'Mage',race:'Gnome'},{name:'C',class:'Mage',race:'Human'}]};
+ const result=applyArmoryRaces(input,data);assert.equal(result[0].race,'Human');assert.equal(result[0].level,20);assert.equal(result[0].raceSource,ARMORY_GUILD_URL);assert.equal(input[0].race,undefined);assert.equal(result[1].race,undefined);assert.equal(result[2].race,'CSV race');assert.equal(result[3].race,undefined);
+ assert.equal(parseRoster(rosterCSV(result))[0].race,'Human');
+ assert.throws(()=>applyArmoryRaces(input,{...data,region:'eu'}),/Invalid/);
+ assert.throws(()=>applyArmoryRaces(input,{...data,characters:[data.characters[0],data.characters[0]]}),/duplicate/);
+});
+test('Published armory races match every current roster name and class without altering roster stats',async()=>{
+ const data=JSON.parse(await fs.readFile(new URL('./races.json',import.meta.url),'utf8')),enriched=applyArmoryRaces(roster,data);
+ assert.equal(new Set(data.characters.map(r=>r.name)).size,data.characters.length);assert.equal(enriched.filter(r=>r.race).length,roster.length);assert.deepEqual(summarize(enriched),summarize(roster));
+ for(const cls of classBreakdown(enriched))assert.equal(cls.races.reduce((n,r)=>n+r.count,0),cls.count);
 });
 
 test('Class totals and race subcounts include unknown races without inventing them',()=>{
