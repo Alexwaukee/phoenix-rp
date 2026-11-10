@@ -6,7 +6,7 @@
   <meta name="description" content="Phoenix RP guild roster, level census and character profiles.">
   <title>Phoenix RP roster</title>
   <link rel="stylesheet" href="style.css?v=20261110-leveling">
-  <script type="module" src="app.mjs?v=20261110-xp-active"></script>
+  <script type="module" src="app.mjs?v=20261110-xp-release"></script>
 </head>
 <body>
 <main>
@@ -27,7 +27,7 @@
     <h2 id="roster-title">Roster <span class="small muted" id="count"></span></h2>
     <p class="small" id="leveling-summary" aria-live="polite">Loading roster history…</p>
     <p class="small" id="xp-median" aria-live="polite"></p>
-    <p class="small muted">Est. XP/hour uses the XP required between recorded levels, divided by calendar hours since the first saved roster on November 6. Everyone uses the same Day 1. Partial-level XP and gains before a character’s first observation are unknown; rates include offline time. Click a character’s Leveling tab for details.</p>
+    <p class="small muted">Est. XP/hour assumes level 1 at release and includes XP earned before the first saved snapshot. It divides estimated XP at the latest recorded level by calendar hours since release. Partial-level XP is unknown; rates include offline time. Each character’s Leveling tab shows the release → first-snapshot rate separately.</p>
     <p class="small muted" id="history-status"></p>
     <div class="history-actions"><button id="download-leveling" disabled>Download leveling CSV</button> <button id="refresh-history">Refresh history</button></div>
     <div class="filters">

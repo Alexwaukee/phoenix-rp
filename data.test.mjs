@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {parseRoster,parseCSV,rosterCSV,summarize,census,classBreakdown,hoursAgo,parseLua,profilesFromLua,validateProfiles,validateGear,cleanText,applyArmoryRaces,ARMORY_GUILD_URL} from './core.mjs';
-import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory,medianXPPerHour} from './leveling.mjs';
+import {snapshot,normalizeHistory,levelingStats,levelingCSV,refreshHistory,medianXPPerHour,RELEASE_AT} from './leveling.mjs';
 import {XP_TO_NEXT,cumulativeXP,milestoneXP} from './xp.mjs';
 const csv=await fs.readFile(new URL('./roster.csv',import.meta.url),'utf8'),roster=parseRoster(csv);
 
@@ -16,16 +16,27 @@ test('Median uses only active leveling characters and handles even, odd and empt
  assert.deepEqual(medianXPPerHour(rows.filter(r=>!['A','B','C'].includes(r.name)),stats),{median:null,count:0});
  assert.deepEqual(medianXPPerHour([{...rows[2],lastOnline:'23h ago'}],stats),{median:100,count:1});
 });
-test('Every character uses the same Day 1, including characters first seen later',()=>{
+test('Release baseline includes pre-snapshot XP while real observation intervals stay separate',()=>{
  const rows=[sample('A',16),sample('B',8),sample('New',2),sample('Short',5)];
  const history=normalizeHistory({schemaVersion:1,snapshots:[snap('c','2026-11-10T12:00:00Z',rows),snap('a','2026-11-08T12:00:00Z',[sample('A',10),sample('B',8)]),snap('b','2026-11-10T00:00:00Z',[sample('A',15),sample('B',8),sample('Short',2)])]});
  const stats=levelingStats(rows,history),a=stats.get('a'),b=stats.get('b'),s=stats.get('short');
- assert.equal(a.gain,6);assert.equal(a.days,2);assert.equal(a.perDay,3);assert.equal(a.recentGain,1);assert.equal(a.recentDays,.5);assert.equal(a.recentPerDay,2);
- assert.equal(a.xpGain,65200);assert.equal(a.hours,48);assert.equal(a.xpPerHour,65200/48);assert.equal(a.recentXPPerHour,1200);
- assert.equal(b.perDay,0);assert.equal(s.days,2);assert.equal(s.observedDays,.5);assert.equal(s.perDay,1.5);assert.equal(s.startedAt,a.startedAt);
- assert.equal(b.xpPerHour,0);assert.equal(s.xpPerHour,4400/48);assert.equal(stats.get('new').xpPerHour,null);
- assert.equal(stats.get('new').status,'one-snapshot');assert.equal(stats.get('new').perDay,null);
- const exported=parseCSV(levelingCSV(rows,stats));assert.equal(exported.length,rows.length+1);assert.equal(exported[1][10],String(65200/48));assert.equal(exported[3][10],'');assert.equal(exported[1][15],'2026-11-08T12:00:00.000Z');
+ assert.equal(a.gain,6);assert.equal(a.hours,133);assert.equal(a.perDay,6/(133/24));assert.equal(a.recentGain,1);assert.equal(a.recentDays,.5);assert.equal(a.recentPerDay,2);
+ assert.equal(a.xpGain,92800);assert.equal(a.observedXP,65200);assert.equal(a.xpPerHour,92800/133);assert.equal(a.recentXPPerHour,1200);
+ assert.equal(a.initialXP,27600);assert.equal(a.initialHours,85);assert.equal(a.initialXPPerHour,27600/85);assert.equal(a.initialXP+a.observedXP,a.xpGain);
+ assert.equal(b.perDay,0);assert.equal(b.xpPerHour,15700/133);assert.equal(b.recentXP,0);
+ assert.equal(s.hours,133);assert.equal(s.observedDays,.5);assert.equal(s.xpPerHour,4800/133);assert.equal(s.startedAt,a.startedAt);
+ assert.equal(stats.get('new').status,'ok');assert.equal(stats.get('new').xpPerHour,400/133);assert.equal(stats.get('new').recentXP,null);
+ assert.equal(a.points.length,3);assert.deepEqual(a.baseline,{at:RELEASE_AT,level:1,assumed:true});
+ const exported=parseCSV(levelingCSV(rows,stats));assert.equal(exported.length,rows.length+1);assert.equal(exported[1][10],String(92800/133));assert.equal(exported[3][10],String(400/133));assert.equal(exported[1][15],RELEASE_AT);assert.equal(exported[1][21],String(27600/85));
+});
+test('An assumed first interval does not qualify a single-snapshot character as actively leveling',()=>{
+ const rows=[sample('One',20)],stats=levelingStats(rows,[snap('a','2026-11-06T23:00:00Z',rows)]),s=stats.get('one');
+ assert.equal(s.xpPerHour,167200/48);assert.equal(s.initialXPPerHour,167200/48);assert.equal(s.points.length,1);assert.equal(s.recentXP,null);assert.deepEqual(medianXPPerHour(rows,stats),{median:null,count:0});
+});
+test('Pre-release timestamps are rejected and a snapshot exactly at release avoids division by zero',()=>{
+ const rows=[sample('A',2)];
+ const invalid=levelingStats(rows,[snap('a','2026-11-03T23:00:00Z',rows)]).get('a');assert.equal(invalid.status,'before-release');assert.equal(invalid.xpPerHour,null);
+ const valid=levelingStats(rows,[snap('a',RELEASE_AT,[sample('A',1)]),snap('b','2026-11-05T00:00:00Z',rows)]).get('a');assert.equal(valid.initialHours,0);assert.equal(valid.initialXPPerHour,null);assert.equal(valid.xpPerHour,400);
 });
 test('XP conversion uses cumulative level costs, handles the cap and rejects unsupported levels',()=>{
  assert.equal(XP_TO_NEXT.length,59);assert.equal(cumulativeXP(1),0);assert.equal(cumulativeXP(10),27600);assert.equal(cumulativeXP(60),4084700);
@@ -39,12 +50,12 @@ test('Changed identities, decreasing levels and untimestamped current levels are
  const stats=levelingStats(rows,history);
  for(const name of ['down','changed']){assert.equal(stats.get(name).status,'changed-history');assert.equal(stats.get(name).perDay,null);}
  for(const name of ['new level','missing'])assert.equal(stats.get(name).status,'not-in-latest');
- assert.equal(stats.get('gap').days,2);assert.equal(stats.get('gap').perDay,3);
+ assert.equal(stats.get('gap').hours,133);assert.equal(stats.get('gap').perDay,6/(133/24));
 });
 test('Future roster commits are loaded automatically, existing snapshots are reused and request limits are surfaced',async()=>{
  const old=snap('a','2026-11-08T12:00:00Z',[sample('A',1)]),sha='b'.repeat(40),calls=[];
  const updated=await refreshHistory([old],async url=>{calls.push(url);return url.includes('/commits?')?{ok:true,json:async()=>[{sha,commit:{committer:{date:'2026-11-10T12:00:00Z'}}},{sha:old.sha}]}:{ok:true,text:async()=>rosterCSV([sample('A',7)])};});
- assert.equal(calls.length,2);assert.equal(updated.length,2);assert.equal(levelingStats([sample('A',7)],updated).get('a').perDay,3);
+ assert.equal(calls.length,2);assert.equal(updated.length,2);assert.equal(levelingStats([sample('A',7)],updated).get('a').xpPerHour,11200/133);
  await assert.rejects(refreshHistory([old],async()=>({ok:false,status:403})),/limit reached/);
  assert.equal(old.characters[0].level,1);
 });
@@ -52,7 +63,7 @@ test('All current characters have a history result and bundled counts match the 
  const history=normalizeHistory(JSON.parse(await fs.readFile(new URL('./leveling-history.json',import.meta.url),'utf8'))),stats=levelingStats(roster,history);
  assert.equal(stats.size,roster.length);assert.equal(history.at(-1).characters.length,roster.length);
  assert.equal(history.at(-1).characters.reduce((n,r)=>n+r.level,0),roster.reduce((n,r)=>n+r.level,0));
- for(const s of stats.values()){assert.ok(s.points.length>0);if(s.status==='ok'){assert.ok(Number.isFinite(s.perDay));assert.equal(s.gain,s.last.level-s.first.level);assert.equal(s.perDay,s.gain/((Date.parse(s.last.at)-Date.parse(history[0].at))/86400000));assert.equal(s.startedAt,history[0].at);}}
+ for(const s of stats.values()){assert.ok(s.points.length>0);if(s.status==='ok'){assert.ok(Number.isFinite(s.xpPerHour));assert.equal(s.gain,s.last.level-s.first.level);assert.equal(s.xpPerHour,cumulativeXP(s.last.level)/((Date.parse(s.last.at)-Date.parse(RELEASE_AT))/3600000));assert.equal(s.startedAt,RELEASE_AT);assert.equal(s.initialXP+s.observedXP,s.xpGain);}}
 });
 
 test('Armory races require a matching name and class, preserve CSV races and never replace roster levels',()=>{

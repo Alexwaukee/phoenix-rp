@@ -2,6 +2,8 @@ import {key,parseRoster,hoursAgo} from './core.mjs?v=20261110-races-xp';
 import {milestoneXP} from './xp.mjs?v=20261110-races-xp';
 
 export const REPO='Alexwaukee/phoenix-rp';
+export const RELEASE_AT='2026-11-04T23:00:00.000Z';
+export const RELEASE_SOURCE='https://us.forums.blizzard.com/en/wow/t/world-of-warcraft-forever-launch-time/2400905';
 export function snapshot(sha,at,rows){
  if(!/^[a-f0-9]{40}$/.test(sha)||!Number.isFinite(Date.parse(at)))throw Error('Invalid roster history timestamp or commit.');
  const seen=new Set();
@@ -13,18 +15,19 @@ export function normalizeHistory(input){
  return [...new Map(input.snapshots.map(s=>{const clean=snapshot(s.sha,s.at,s.characters);return [clean.sha,clean];})).values()].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)||a.sha.localeCompare(b.sha));
 }
 export function levelingStats(roster,snapshots){
- const histories=new Map(),latest=snapshots.at(-1),startedAt=snapshots[0]?.at;
+ const histories=new Map(),latest=snapshots.at(-1),startedAt=RELEASE_AT;
  for(const s of snapshots)for(const r of s.characters){const id=key(r.name);if(!histories.has(id))histories.set(id,[]);histories.get(id).push({at:s.at,sha:s.sha,level:r.level,class:r.class});}
  return new Map(roster.map(r=>{
   const points=histories.get(key(r.name))||[],first=points[0],last=points.at(-1),previous=points.at(-2);
   let status='ok';
   if(!last||last.sha!==latest?.sha||last.level!==r.level||last.class!==r.class)status='not-in-latest';
   else if(points.some((p,i)=>p.class!==r.class||(i&&p.level<points[i-1].level)))status='changed-history';
-  else if(!previous||Date.parse(last.at)<=Date.parse(first.at))status='one-snapshot';
+  else if(Date.parse(first.at)<Date.parse(RELEASE_AT)||Date.parse(last.at)<=Date.parse(RELEASE_AT))status='before-release';
   const valid=status==='ok',days=valid?(Date.parse(last.at)-Date.parse(startedAt))/86400000:null,observedDays=valid?(Date.parse(last.at)-Date.parse(first.at))/86400000:null,gain=valid?last.level-first.level:null;
-  const recentDays=valid?(Date.parse(last.at)-Date.parse(previous.at))/86400000:null,recentGain=valid?last.level-previous.level:null;
-  const xpGain=valid?milestoneXP(first.level,last.level):null,hours=days===null?null:days*24,recentXP=valid?milestoneXP(previous.level,last.level):null;
-  return [key(r.name),{status,points,first,last,startedAt,days,hours,observedDays,gain,perDay:valid?gain/days:null,xpGain,xpPerHour:xpGain!==null&&hours>0?xpGain/hours:null,recentGain,recentDays,recentPerDay:recentDays>0?recentGain/recentDays:null,recentXP,recentXPPerHour:recentXP!==null&&recentDays>0?recentXP/(recentDays*24):null}];
+  const recentDays=valid&&previous?(Date.parse(last.at)-Date.parse(previous.at))/86400000:null,recentGain=valid&&previous?last.level-previous.level:null;
+  const xpGain=valid?milestoneXP(1,last.level):null,observedXP=valid?milestoneXP(first.level,last.level):null,hours=days===null?null:days*24,recentXP=valid&&previous?milestoneXP(previous.level,last.level):null;
+  const initialXP=valid?milestoneXP(1,first.level):null,initialHours=valid?(Date.parse(first.at)-Date.parse(RELEASE_AT))/3600000:null;
+  return [key(r.name),{status,points,first,last,baseline:{at:RELEASE_AT,level:1,assumed:true},startedAt,days,hours,observedDays,gain,perDay:valid?gain/days:null,xpGain,observedXP,xpPerHour:xpGain!==null&&hours>0?xpGain/hours:null,initialXP,initialHours,initialXPPerHour:initialXP!==null&&initialHours>0?initialXP/initialHours:null,recentGain,recentDays,recentPerDay:recentDays>0?recentGain/recentDays:null,recentXP,recentXPPerHour:recentXP!==null&&recentDays>0?recentXP/(recentDays*24):null}];
  }));
 }
 const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
@@ -33,8 +36,8 @@ export function medianXPPerHour(rows,stats){
  return {median:n?(rates[Math.floor((n-1)/2)]+rates[Math.floor(n/2)])/2:null,count:n};
 }
 export function levelingCSV(roster,stats){
- const rows=[['Name','Class','Current level','Status','First observed (UTC)','First level','Latest observed (UTC)','Snapshots','Hours since day 1','Levels gained (observed)','Estimated XP/hour since day 1','Previous observed (UTC)','Latest levels gained','Latest interval hours','Latest estimated XP/hour','Day 1 (UTC)','Hours observed for character','Estimated XP gained (level milestones)','Latest estimated XP gained']];
- for(const r of roster){const s=stats.get(key(r.name));rows.push([r.name,r.class,r.level,s.status,s.first?.at,s.first?.level,s.last?.at,s.points.length,s.hours,s.gain,s.xpPerHour,s.points.at(-2)?.at,s.recentGain,s.recentDays===null?null:s.recentDays*24,s.recentXPPerHour,s.startedAt,s.observedDays===null?null:s.observedDays*24,s.xpGain,s.recentXP]);}
+ const rows=[['Name','Class','Current level','Status','First observed (UTC)','First level','Latest observed (UTC)','Recorded snapshots','Hours since release','Levels gained between recorded snapshots','Estimated XP/hour since release (assumed level 1)','Previous observed (UTC)','Latest levels gained','Latest interval hours','Latest estimated XP/hour','Release baseline (UTC)','Hours observed for character','Estimated XP since release','Latest estimated XP gained','Release to first snapshot hours','Estimated XP at first snapshot','Release to first snapshot estimated XP/hour','Estimated XP between recorded snapshots','Release baseline level (assumed)']];
+ for(const r of roster){const s=stats.get(key(r.name));rows.push([r.name,r.class,r.level,s.status,s.first?.at,s.first?.level,s.last?.at,s.points.length,s.hours,s.gain,s.xpPerHour,s.points.at(-2)?.at,s.recentGain,s.recentDays===null?null:s.recentDays*24,s.recentXPPerHour,s.startedAt,s.observedDays===null?null:s.observedDays*24,s.xpGain,s.recentXP,s.initialHours,s.initialXP,s.initialXPPerHour,s.observedXP,1]);}
  return rows.map(r=>r.map(quote).join(',')).join('\r\n')+'\r\n';
 }
 export async function refreshHistory(bundled,request=(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(15000)})){
